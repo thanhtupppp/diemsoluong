@@ -73,6 +73,9 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
   - [nms_filter_test.dart](file:///d:/diemsoluong/test/domain/nms_filter_test.dart) (covers NMS box filtering)
 - **Class-aware NMS Test**: Added a new test case checking that NMS does *not* suppress overlapping boxes belonging to different class IDs.
 
+### 11. Project Documentation & System Blueprints
+- **Comprehensive README.md Rewrite**: Overwrote the default template [README.md](file:///d:/diemsoluong/README.md) with an exhaustive developer guide detailing current/future modular pipelines, model training and exporting guidelines, testing setups, profiling benchmarks, and abstraction blueprints for dynamic `Detector` and `ModelRepository` support.
+
 ---
 
 ## Verification Results

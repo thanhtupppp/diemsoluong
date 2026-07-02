@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../data/models/model_config.dart';
 import '../state/detector_notifier.dart';
-import '../../features/detection/presentation/widgets/detector_painter.dart';
+import '../../features/overlay/presentation/widgets/overlay_painter.dart';
 import '../../features/camera/presentation/screens/camera_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -84,7 +84,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 builder: (context, constraints) {
                                   return CustomPaint(
                                     size: Size(constraints.maxWidth, constraints.maxHeight),
-                                    painter: DetectorPainter(
+                                    painter: OverlayPainter(
                                       detections: state.detections,
                                       originalImageSize: _imageSize!,
                                       labels: ModelConfig.cocoLabels,

@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../data/models/model_config.dart';
 import '../../../../presentation/state/detector_notifier.dart';
-import '../../../detection/presentation/widgets/detector_painter.dart';
+import '../../../overlay/presentation/widgets/overlay_painter.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -186,7 +186,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                       CameraPreview(_controller!),
                       if (state.detections.isNotEmpty && _previewSize != null)
                         CustomPaint(
-                          painter: DetectorPainter(
+                          painter: OverlayPainter(
                             detections: state.detections,
                             originalImageSize: _previewSize!,
                             labels: ModelConfig.cocoLabels,

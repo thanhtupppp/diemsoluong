@@ -32,7 +32,11 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
   This transformation is performed immediately after decoding but before running Non-Maximum Suppression (NMS), ensuring NMS evaluates boxes under their true aspect ratios.
 - **Simplified Painting**: Simplified [detector_painter.dart](file:///d:/diemsoluong/lib/presentation/widgets/detector_painter.dart) to map coordinate scaling solely from original image space to active canvas size (removing dependencies on model input sizes like `ModelConfig.inputSize`), resulting in a cleaner and decoupled layout architecture.
 
-### 5. Optimized Bounding Box Painter (DetectorPainter) & Value Equality
+### 5. TFLite Service Lifecycle Guards
+- **Initialization Race Lock**: Configured [tflite_service.dart](file:///d:/diemsoluong/lib/data/services/tflite_service.dart) with `Future<void>? _initializing` lock. When multiple async calls to `detectObjects()` trigger concurrently, only one initialization Future is spawned and awaited, resolving race conditions.
+- **State Dispose Guards**: Added an explicit `_disposed` flag constraint. Invoking operations on `TfliteService` after it has been disposed triggers a fast-failing `StateError` immediately rather than attempting isolate messages on dead resources.
+
+### 6. Optimized Bounding Box Painter (DetectorPainter) & Value Equality
 - **Built-in Contain Mapping**: Replaced manual contain-fit calculation in [detector_painter.dart](file:///d:/diemsoluong/lib/presentation/widgets/detector_painter.dart) with Flutter's standard `applyBoxFit` API (`BoxFit.contain`), guaranteeing correct scaling alignment.
 - **Value-based Equality Overrides**: Implemented `operator ==` and `hashCode` overrides in [detection.dart](file:///d:/diemsoluong/lib/data/models/detection.dart) to enable proper comparative evaluation of detection properties.
 - **Strict Repaint Check**: Utilized `listEquals` inside `shouldRepaint()` to compare items deep in the `detections` and `labels` lists, ensuring CustomPainter redrawing occurs reliably when content changes.
@@ -40,7 +44,7 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
 - **Clamped Boundary Tags**: Configured label coordinates mapping to clamp `labelLeft` and `labelTop` values against both the top/left edges and the bottom/right canvas bounds (e.g. `rawTop.clamp(0.0, size.height - labelHeight)`), preventing layout bleed.
 - **Improved Typography & Readability**: Changed box labels to display white text over a solid class-colored rounded background box (`withValues(alpha: 0.85)`), providing a premium look that stands out clearly over any camera viewfinder preview details.
 
-### 6. Production-Ready YOLO Output Decoder
+### 7. Production-Ready YOLO Output Decoder
 - **Dimension Guards**: Added checking inside [decode_yolo_output.dart](file:///d:/diemsoluong/lib/domain/usecases/decode_yolo_output.dart) to verify that the incoming flat tensor contains at least `(4 + numClasses) * numBoxes` float elements, preventing array out-of-bounds crashes.
 - **Config-driven Scale**: Replaced the hardcoded `640.0` scale factor with `ModelConfig.inputSize` to make the decoder model-agnostic.
 - **Edge boundary Clamping**: Computed coordinate values as standard LTRB (`left, top, right, bottom`) bounds and clamped each coordinate cleanly within the range of `[0.0, ModelConfig.inputSize]` directly after parsing.
@@ -48,7 +52,7 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
 - **NaN/Infinity Protection**: Skips processing bounding boxes that decode to non-finite numbers (`!isFinite`), preventing crashes down the line.
 - **Invalid Area Filtering**: Discards box decodes resulting in non-positive dimensions (`width <= 0` or `height <= 0`) to maintain a clean list for downstream NMS filtering.
 
-### 7. Unit Test Suite Restructuring & Enhancements
+### 8. Unit Test Suite Restructuring & Enhancements
 - **Restructuring**: Split the old monolithic usecases test file into:
   - [decode_yolo_output_test.dart](file:///d:/diemsoluong/test/domain/decode_yolo_output_test.dart) (covers YOLOv8 decoder coordinates mapping)
   - [nms_filter_test.dart](file:///d:/diemsoluong/test/domain/nms_filter_test.dart) (covers NMS box filtering)

@@ -1,6 +1,6 @@
 # Camera Permissions, Inference and Test Suite Refactoring Walkthrough
 
-This walkthrough documents all completed tasks to resolve camera runtime issues, state notifier warnings, and test coverage improvements.
+This walkthrough documents all completed tasks to resolve camera runtime issues, state notifier warnings, test coverage improvements, and the structural refactoring of Stage 1.
 
 ## Changes Made
 
@@ -25,20 +25,20 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
 - **Standard Flutter colors compatibility**: Set background box to use the standard `withValues(alpha: 0.7)` color API, as the linter of the local Flutter environment enforces it on newer versions.
 
 ### 4. Coordinated Letterbox Preprocessing & Postprocessing Mapping
-- **Letterbox Resize**: Refactored `preprocessImage()` in [image_service.dart](file:///d:/diemsoluong/lib/data/services/image_service.dart) to preserve the original image's aspect ratio. The image is scaled proportionally to fit the target model input size and composited onto a square canvas padded with solid gray pixels (color value 114). The function returns a `PreprocessResult` containing the scaled input buffer along with `originalWidth`, `originalHeight`, `scale`, `padX` (representing exact floor-composited left padding), and `padY` (representing exact floor-composited top padding) metadata to avoid sub-pixel misalignment.
-- **Unletterbox Postprocessing**: Modified `_isolateEntryPoint` in [inference_isolate.dart](file:///d:/diemsoluong/lib/core/isolate/inference_isolate.dart) to map coordinate results from the model's canvas coordinate space `[0 - 640]` back to absolute pixels of the original image space:
+- **Letterbox Resize**: Refactored `preprocessImage()` in [image_service.dart](file:///d:/diemsoluong/lib/features/detection/data/services/image_service.dart) to preserve the original image's aspect ratio. The image is scaled proportionally to fit the target model input size and composited onto a square canvas padded with solid gray pixels (color value 114). The function returns a `PreprocessResult` containing the scaled input buffer along with `originalWidth`, `originalHeight`, `scale`, `padX` (representing exact floor-composited left padding), and `padY` (representing exact floor-composited top padding) metadata to avoid sub-pixel misalignment.
+- **Unletterbox Postprocessing**: Modified `_isolateEntryPoint` in [inference_isolate.dart](file:///d:/diemsoluong/lib/features/detection/data/isolates/inference_isolate.dart) to map coordinate results from the model's canvas coordinate space `[0 - 640]` back to absolute pixels of the original image space:
   - $X_{orig} = (X_{model} - \text{padX}) / \text{scale}$
   - $Y_{orig} = (Y_{model} - \text{padY}) / \text{scale}$
   This transformation is performed immediately after decoding but before running Non-Maximum Suppression (NMS), ensuring NMS evaluates boxes under their true aspect ratios.
-- **Simplified Painting**: Simplified [detector_painter.dart](file:///d:/diemsoluong/lib/presentation/widgets/detector_painter.dart) to map coordinate scaling solely from original image space to active canvas size (removing dependencies on model input sizes like `ModelConfig.inputSize`), resulting in a cleaner and decoupled layout architecture.
+- **Simplified Painting**: Simplified [detector_painter.dart](file:///d:/diemsoluong/lib/features/detection/presentation/widgets/detector_painter.dart) to map coordinate scaling solely from original image space to active canvas size (removing dependencies on model input sizes like `ModelConfig.inputSize`), resulting in a cleaner and decoupled layout architecture.
 
 ### 5. TFLite Service Lifecycle Guards
-- **Initialization Race Lock**: Configured [tflite_service.dart](file:///d:/diemsoluong/lib/data/services/tflite_service.dart) with `Future<void>? _initializing` lock. When multiple async calls to `detectObjects()` trigger concurrently, only one initialization Future is spawned and awaited, resolving race conditions.
+- **Initialization Race Lock**: Configured [tflite_service.dart](file:///d:/diemsoluong/lib/features/detection/data/services/tflite_service.dart) with `Future<void>? _initializing` lock. When multiple async calls to `detectObjects()` trigger concurrently, only one initialization Future is spawned and awaited, resolving race conditions.
 - **Initialization Retry Safe**: Wrapped the initialization await inside a `try`/`finally` block to clear the `_initializing` future handle on errors, allowing callers to retry startup if initialization fails.
 - **State Dispose Guards**: Added an explicit `_disposed` flag constraint. Invoking operations on `TfliteService` after it has been disposed triggers a fast-failing `StateError` immediately rather than attempting isolate messages on dead resources.
 
 ### 6. Mutate-Safe Non-Maximum Suppression (NMS) Filter
-- **Mutate-Safe Cloning**: Refactored `applyNMS()` in [nms_filter.dart](file:///d:/diemsoluong/lib/domain/usecases/nms_filter.dart) to perform list cloning (`List<Detection>.from(detections)`) prior to sorting. This isolates internal sorting modifications and prevents side-effects in upstream states or notifier UI bindings.
+- **Mutate-Safe Cloning**: Refactored `applyNMS()` in [apply_nms.dart](file:///d:/diemsoluong/lib/features/detection/domain/usecases/apply_nms.dart) to perform list cloning (`List<Detection>.from(detections)`) prior to sorting. This isolates internal sorting modifications and prevents side-effects in upstream states or notifier UI bindings.
 - **Inclusive Threshold Constraint**: Changed the overlap check condition to use the standard inclusive threshold comparison (`iou >= iouThreshold`), matching typical NMS definitions.
 
 ### 7. Refactored and Optimized Inference Isolate (InferenceIsolate)
@@ -51,8 +51,8 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
 - **Disposal State Clean**: Updated `dispose()` to set `_isReady = false` explicitly.
 - **Exception debugPrint logging**: Replaced raw `print()` with standard `debugPrint()` inside isolate catch blocks when `kDebugMode` is active to assist with developer model integration diagnostics without cluttering production console feeds.
 
-### 8. Optimized Bounding Box Painter (DetectorPainter) & Value Equality
-- **Built-in Contain Mapping**: Replaced manual contain-fit calculation in [detector_painter.dart](file:///d:/diemsoluong/lib/presentation/widgets/detector_painter.dart) with Flutter's standard `applyBoxFit` API (`BoxFit.contain`), guaranteeing correct scaling alignment.
+### 8. Bounding Box Painter (DetectorPainter) & Value Equality
+- **Built-in Contain Mapping**: Replaced manual contain-fit calculation in [detector_painter.dart](file:///d:/diemsoluong/lib/features/detection/presentation/widgets/detector_painter.dart) with Flutter's standard `applyBoxFit` API (`BoxFit.contain`), guaranteeing correct scaling alignment.
 - **Value-based Equality Overrides**: Implemented `operator ==` and `hashCode` overrides in [detection.dart](file:///d:/diemsoluong/lib/data/models/detection.dart) to enable proper comparative evaluation of detection properties.
 - **Strict Repaint Check**: Utilized `listEquals` inside `shouldRepaint()` to compare items deep in the `detections` and `labels` lists, ensuring CustomPainter redrawing occurs reliably when content changes.
 - **Canvas Clipping Boundaries**: Wrapped custom drawing inside `canvas.save()` / `canvas.restore()` and applied `canvas.clipRect(Offset.zero & size)` to prevent bounding boxes and labels from rendering outside the layout boundaries.
@@ -60,42 +60,21 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
 - **Improved Typography & Readability**: Changed box labels to display white text over a solid class-colored rounded background box (`withValues(alpha: 0.85)`), providing a premium look that stands out clearly over any camera viewfinder preview details.
 
 ### 9. Production-Ready YOLO Output Decoder
-- **Dimension Guards**: Added checking inside [decode_yolo_output.dart](file:///d:/diemsoluong/lib/domain/usecases/decode_yolo_output.dart) to verify that the incoming flat tensor contains at least `(4 + numClasses) * numBoxes` float elements, preventing array out-of-bounds crashes.
+- **Dimension Guards**: Added checking inside [decode_detections.dart](file:///d:/diemsoluong/lib/features/detection/domain/usecases/decode_detections.dart) to verify that the incoming flat tensor contains at least `(4 + numClasses) * numBoxes` float elements, preventing array out-of-bounds crashes.
 - **Config-driven Scale**: Replaced the hardcoded `640.0` scale factor with `ModelConfig.inputSize` to make the decoder model-agnostic.
 - **Edge boundary Clamping**: Computed coordinate values as standard LTRB (`left, top, right, bottom`) bounds and clamped each coordinate cleanly within the range of `[0.0, ModelConfig.inputSize]` directly after parsing.
 - **Explicit Double Conversions**: Appended `.toDouble()` after `.clamp()` to satisfy the Dart analyzer and avoid type mismatches on certain platforms.
 - **NaN/Infinity Protection**: Skips processing bounding boxes that decode to non-finite numbers (`!isFinite`), preventing crashes down the line.
 - **Invalid Area Filtering**: Discards box decodes resulting in non-positive dimensions (`width <= 0` or `height <= 0`) to maintain a clean list for downstream NMS filtering.
 
-### 10. Unit Test Suite Restructuring & Enhancements
-- **Restructuring**: Split the old monolithic usecases test file into:
-  - [decode_yolo_output_test.dart](file:///d:/diemsoluong/test/domain/decode_yolo_output_test.dart) (covers YOLOv8 decoder coordinates mapping)
-  - [nms_filter_test.dart](file:///d:/diemsoluong/test/domain/nms_filter_test.dart) (covers NMS box filtering)
-- **Class-aware NMS Test**: Added a new test case checking that NMS does *not* suppress overlapping boxes belonging to different class IDs.
-
-### 11. Project Documentation & System Blueprints
-- **Comprehensive README.md Rewrite**: Overwrote the default template [README.md](file:///d:/diemsoluong/README.md) with an exhaustive developer guide detailing current/future modular pipelines, model training and exporting guidelines, testing setups, profiling benchmarks, and abstraction blueprints for dynamic `Detector` and `ModelRepository` support.
-
----
-
-## Verification Results
-
-### 1. Static Analysis (`flutter analyze`)
-- **Status**: Passed (0 issues found).
-- **Console Output**:
-  ```
-  Analyzing diemsoluong...                                        
-  No issues found! (ran in 2.9s)
-  ```
-
-### 2. Unit Tests (`flutter test`)
-- **Status**: Passed (4/4 tests).
-- **Console Output**:
-  ```
-  00:00 +0: loading D:/diemsoluong/test/domain/decode_yolo_output_test.dart
-  00:00 +0: D:/diemsoluong/test/domain/decode_yolo_output_test.dart: YOLOv8 Decode Tests decodeDetections parses flat Float32List correctly
-  00:00 +1: D:/diemsoluong/test/domain/nms_filter_test.dart: NMS Filter Tests applyNMS filters overlapping boxes
-  00:00 +2: D:/diemsoluong/test/domain/nms_filter_test.dart: NMS Filter Tests applyNMS does not filter overlapping boxes of different classes
-  00:00 +3: D:/diemsoluong/test/widget_test.dart: App loads HomeScreen successfully with title
-  00:01 +4: All tests passed!
-  ```
+### 10. Completed Stage 1 Refactoring (Detection Modularization)
+- **Detector Abstraction Interface**: Created [detector.dart](file:///d:/diemsoluong/lib/features/detection/domain/services/detector.dart) interface to decouple the inference layer.
+- **TfliteDetector Concrete Implementation**: Created [tflite_detector.dart](file:///d:/diemsoluong/lib/features/detection/data/detectors/tflite_detector.dart) implementing `Detector` and delegating execution to `TfliteService`.
+- **Relocated Data Layer**: Moved services (`image_service.dart`, `tflite_service.dart`) and isolates (`inference_isolate.dart`) from general directories to `lib/features/detection/data/` directories.
+- **Relocated Domain Layer Use Cases**: Moved and renamed use cases:
+  - `decode_yolo_output.dart` -> `lib/features/detection/domain/usecases/decode_detections.dart`
+  - `nms_filter.dart` -> `lib/features/detection/domain/usecases/apply_nms.dart`
+- **Relocated Custom Painter**: Moved `detector_painter.dart` to `lib/features/detection/presentation/widgets/detector_painter.dart`.
+- **Synchronized Tests**: Relocated and updated imports of test files to match:
+  - `test/features/detection/decode_detections_test.dart`
+  - `test/features/detection/apply_nms_test.dart`

@@ -9,7 +9,7 @@ class DetectorState {
   final List<Detection> detections;
   final String? errorMessage;
 
-  DetectorState({
+  const DetectorState({
     this.isLoading = false,
     this.imageBytes,
     this.detections = const [],
@@ -41,7 +41,7 @@ final tfliteServiceProvider = Provider<TfliteService>((ref) {
 class DetectorNotifier extends Notifier<DetectorState> {
   @override
   DetectorState build() {
-    return DetectorState();
+    return const DetectorState();
   }
 
   Future<void> detectImage(Uint8List bytes) async {
@@ -64,7 +64,7 @@ class DetectorNotifier extends Notifier<DetectorState> {
   }
 
   void clear() {
-    state = DetectorState();
+    state = const DetectorState();
   }
 }
 

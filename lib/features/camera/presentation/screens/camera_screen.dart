@@ -9,6 +9,7 @@ import '../../../../data/models/model_config.dart';
 import '../../../../presentation/state/detector_notifier.dart';
 import '../../../overlay/presentation/widgets/overlay_painter.dart';
 import '../../../overlay/presentation/widgets/interactive_line_overlay.dart';
+import '../../../overlay/presentation/widgets/stats_dashboard.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -219,23 +220,34 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             ),
           Positioned(
             bottom: 30,
-            left: 20,
-            right: 20,
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                'Phát hiện: ${state.tracks.length} | Đã đếm qua vạch: ${state.classCounts.values.fold(0, (sum, val) => sum + val)}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+            left: 10,
+            right: 10,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                StatsDashboard(
+                  classCounts: state.classCounts,
+                  labels: ModelConfig.cocoLabels,
                 ),
-                textAlign: TextAlign.center,
-              ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Phát hiện: ${state.tracks.length} | Đã đếm qua vạch: ${state.classCounts.values.fold(0, (sum, val) => sum + val)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

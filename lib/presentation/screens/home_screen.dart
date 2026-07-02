@@ -8,6 +8,7 @@ import '../state/detector_notifier.dart';
 import '../../features/overlay/presentation/widgets/overlay_painter.dart';
 import '../../features/camera/presentation/screens/camera_screen.dart';
 import '../../features/overlay/presentation/widgets/interactive_line_overlay.dart';
+import '../../features/overlay/presentation/widgets/stats_dashboard.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -144,7 +145,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
             ),
-            if (state.tracks.isNotEmpty && !state.isLoading)
+            if (state.tracks.isNotEmpty && !state.isLoading) ...[
+              StatsDashboard(
+                classCounts: state.classCounts,
+                labels: ModelConfig.cocoLabels,
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 20),
                 color: Colors.teal.shade50,
@@ -204,6 +209,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ],
                 ),
               ),
+            ],
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(

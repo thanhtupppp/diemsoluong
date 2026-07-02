@@ -30,21 +30,31 @@ class InferenceRequest {
 class InferenceIsolate {
   Isolate? _isolate;
   SendPort? _sendPort;
-  final ReceivePort _receivePort = ReceivePort();
+  ReceivePort? _receivePort;
   bool _isReady = false;
 
   bool get isReady => _isReady;
 
   Future<void> init(String modelPath) async {
-    final token = RootIsolateToken.instance!;
-    final isolate = await Isolate.spawn(
-      _isolateEntryPoint,
-      [_receivePort.sendPort, token, modelPath],
-    );
-    _isolate = isolate;
+    if (_isReady) return;
 
-    _sendPort = await _receivePort.first as SendPort;
-    _isReady = true;
+    final token = RootIsolateToken.instance!;
+    final receivePort = ReceivePort();
+    _receivePort = receivePort;
+
+    try {
+      final isolate = await Isolate.spawn(
+        _isolateEntryPoint,
+        [receivePort.sendPort, token, modelPath],
+      );
+      _isolate = isolate;
+
+      _sendPort = await receivePort.first as SendPort;
+      _isReady = true;
+    } catch (_) {
+      dispose();
+      rethrow;
+    }
   }
 
   Future<List<Detection>> runInference(InferenceRequest request) async {
@@ -69,7 +79,8 @@ class InferenceIsolate {
     _isolate?.kill(priority: Isolate.beforeNextEvent);
     _isolate = null;
     _sendPort = null;
-    _receivePort.close();
+    _receivePort?.close();
+    _receivePort = null;
   }
 
   @pragma('vm:entry-point')

@@ -33,17 +33,14 @@ class InteractiveLineOverlay extends StatelessWidget {
         final dx = (size.width - destinationSize.width) / 2;
         final dy = (size.height - destinationSize.height) / 2;
 
-        final scaleX = destinationSize.width / originalImageSize.width;
-        final scaleY = destinationSize.height / originalImageSize.height;
-
-        // Chuyển đổi tọa độ từ model space sang view space (màn hình)
+        // Chuyển đổi tọa độ normalized sang view space (màn hình)
         final viewPointA = Offset(
-          countingLine.pointA.dx * scaleX + dx,
-          countingLine.pointA.dy * scaleY + dy,
+          countingLine.pointA.dx * destinationSize.width + dx,
+          countingLine.pointA.dy * destinationSize.height + dy,
         );
         final viewPointB = Offset(
-          countingLine.pointB.dx * scaleX + dx,
-          countingLine.pointB.dy * scaleY + dy,
+          countingLine.pointB.dx * destinationSize.width + dx,
+          countingLine.pointB.dy * destinationSize.height + dy,
         );
 
         const handleRadius = 20.0;
@@ -57,14 +54,21 @@ class InteractiveLineOverlay extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onPanUpdate: (details) {
-                  // Sử dụng delta kéo chuyển sang model space để cộng dồn tọa độ
-                  final deltaModelX = details.delta.dx / scaleX;
-                  final deltaModelY = details.delta.dy / scaleY;
+                  // Sử dụng delta kéo chuyển sang normalized space để cộng dồn tọa độ
+                  final deltaNormalizedX =
+                      details.delta.dx / destinationSize.width;
+                  final deltaNormalizedY =
+                      details.delta.dy / destinationSize.height;
 
-                  final newModelX = (countingLine.pointA.dx + deltaModelX).clamp(0.0, originalImageSize.width);
-                  final newModelY = (countingLine.pointA.dy + deltaModelY).clamp(0.0, originalImageSize.height);
+                  final newModelX = (countingLine.pointA.dx + deltaNormalizedX)
+                      .clamp(0.0, 1.0);
+                  final newModelY = (countingLine.pointA.dy + deltaNormalizedY)
+                      .clamp(0.0, 1.0);
 
-                  onLineChanged(Offset(newModelX, newModelY), countingLine.pointB);
+                  onLineChanged(
+                    Offset(newModelX, newModelY),
+                    countingLine.pointB,
+                  );
                 },
                 child: Container(
                   width: handleRadius * 2,
@@ -101,13 +105,20 @@ class InteractiveLineOverlay extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onPanUpdate: (details) {
-                  final deltaModelX = details.delta.dx / scaleX;
-                  final deltaModelY = details.delta.dy / scaleY;
+                  final deltaNormalizedX =
+                      details.delta.dx / destinationSize.width;
+                  final deltaNormalizedY =
+                      details.delta.dy / destinationSize.height;
 
-                  final newModelX = (countingLine.pointB.dx + deltaModelX).clamp(0.0, originalImageSize.width);
-                  final newModelY = (countingLine.pointB.dy + deltaModelY).clamp(0.0, originalImageSize.height);
+                  final newModelX = (countingLine.pointB.dx + deltaNormalizedX)
+                      .clamp(0.0, 1.0);
+                  final newModelY = (countingLine.pointB.dy + deltaNormalizedY)
+                      .clamp(0.0, 1.0);
 
-                  onLineChanged(countingLine.pointA, Offset(newModelX, newModelY));
+                  onLineChanged(
+                    countingLine.pointA,
+                    Offset(newModelX, newModelY),
+                  );
                 },
                 child: Container(
                   width: handleRadius * 2,

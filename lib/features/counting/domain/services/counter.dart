@@ -1,7 +1,9 @@
+import 'dart:ui';
+
 import '../../../tracking/domain/entities/track.dart';
 import '../entities/counting_result.dart';
 
 abstract class Counter {
-  CountingResult process(List<Track> tracks);
+  CountingResult process(List<Track> tracks, {Size? imageSize});
   void reset();
 }

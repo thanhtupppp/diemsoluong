@@ -8,8 +8,9 @@ List<Detection> decodeDetections(
   Float32List output,
   int numBoxes,
   int numClasses,
-  double confThreshold,
-) {
+  double confThreshold, {
+  BoxCoordinateFormat boxCoordinateFormat = ModelConfig.boxCoordinateFormat,
+}) {
   final expectedLength = (4 + numClasses) * numBoxes;
   if (output.length < expectedLength) {
     return [];
@@ -34,10 +35,19 @@ List<Detection> decodeDetections(
       continue;
     }
 
-    final xCenter = output[i] * inputSize;
-    final yCenter = output[numBoxes + i] * inputSize;
-    final w = output[2 * numBoxes + i] * inputSize;
-    final h = output[3 * numBoxes + i] * inputSize;
+    final xCenter = _decodeCoordinate(output[i], inputSize, boxCoordinateFormat);
+    final yCenter =
+        _decodeCoordinate(output[numBoxes + i], inputSize, boxCoordinateFormat);
+    final w = _decodeCoordinate(
+      output[2 * numBoxes + i],
+      inputSize,
+      boxCoordinateFormat,
+    );
+    final h = _decodeCoordinate(
+      output[3 * numBoxes + i],
+      inputSize,
+      boxCoordinateFormat,
+    );
 
     if (!xCenter.isFinite || !yCenter.isFinite || !w.isFinite || !h.isFinite) {
       continue;
@@ -70,4 +80,17 @@ List<Detection> decodeDetections(
   }
 
   return results;
+}
+
+double _decodeCoordinate(
+  double value,
+  double inputSize,
+  BoxCoordinateFormat boxCoordinateFormat,
+) {
+  switch (boxCoordinateFormat) {
+    case BoxCoordinateFormat.normalized:
+      return value * inputSize;
+    case BoxCoordinateFormat.pixels:
+      return value;
+  }
 }

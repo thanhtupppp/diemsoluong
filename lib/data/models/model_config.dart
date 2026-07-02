@@ -1,8 +1,15 @@
+enum BoxCoordinateFormat {
+  normalized,
+  pixels,
+}
+
 class ModelConfig {
   static const int inputSize = 640;
   static const double defaultConfidenceThreshold = 0.25;
   static const double defaultIouThreshold = 0.45;
   static const String modelAssetPath = 'assets/models/yolov8n_float16.tflite';
+  static const BoxCoordinateFormat boxCoordinateFormat =
+      BoxCoordinateFormat.normalized;
   
   // Danh sách nhãn COCO mặc định làm ví dụ
   static const List<String> cocoLabels = [

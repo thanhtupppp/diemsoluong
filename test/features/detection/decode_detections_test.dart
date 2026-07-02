@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:diemsoluong/data/models/model_config.dart';
 import 'package:diemsoluong/features/detection/domain/usecases/decode_detections.dart';
 
 void main() {
@@ -21,7 +22,13 @@ void main() {
         0.8, 0.1, 0.9, // Class 0 Scores
       ]);
 
-      final detections = decodeDetections(output, numBoxes, numClasses, 0.5);
+      final detections = decodeDetections(
+        output,
+        numBoxes,
+        numClasses,
+        0.5,
+        boxCoordinateFormat: BoxCoordinateFormat.normalized,
+      );
       
       // Chỉ 2 box đạt ngưỡng score >= 0.5 (box 0 và box 2)
       expect(detections.length, 2);
@@ -31,6 +38,32 @@ void main() {
       // Kiểm tra toạ độ xCenter = 0.5 * 640 = 320, width = 0.1 * 640 = 64
       // rect left = 320 - 32 = 288
       expect(detections[0].rect.left, closeTo(288.0, 1e-5));
+    });
+
+    test('decodeDetections can parse pixel-space box coordinates', () {
+      const numBoxes = 1;
+      const numClasses = 1;
+      final output = Float32List.fromList([
+        320, // X-center
+        320, // Y-center
+        64, // Width
+        64, // Height
+        0.9, // Class 0 score
+      ]);
+
+      final detections = decodeDetections(
+        output,
+        numBoxes,
+        numClasses,
+        0.5,
+        boxCoordinateFormat: BoxCoordinateFormat.pixels,
+      );
+
+      expect(detections, hasLength(1));
+      expect(detections.single.rect.left, closeTo(288.0, 1e-5));
+      expect(detections.single.rect.top, closeTo(288.0, 1e-5));
+      expect(detections.single.rect.right, closeTo(352.0, 1e-5));
+      expect(detections.single.rect.bottom, closeTo(352.0, 1e-5));
     });
   });
 }

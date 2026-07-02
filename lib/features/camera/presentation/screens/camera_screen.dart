@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../data/models/model_config.dart';
+import '../../../detection/data/services/image_service.dart';
 import '../../../../presentation/state/detector_notifier.dart';
 import '../../../overlay/presentation/widgets/overlay_painter.dart';
 import '../../../overlay/presentation/widgets/interactive_line_overlay.dart';
@@ -20,11 +21,13 @@ class CameraScreen extends ConsumerStatefulWidget {
 
 class _CameraScreenState extends ConsumerState<CameraScreen>
     with WidgetsBindingObserver {
+  static const Duration _minInferenceInterval = Duration(seconds: 1);
+
   CameraController? _controller;
-  Timer? _captureTimer;
   bool _isProcessing = false;
   bool _isDisposed = false;
   bool _isInitializingCamera = false;
+  DateTime? _lastInferenceStartedAt;
   Size? _previewSize;
   String? _cameraError;
 
@@ -80,7 +83,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         });
       }
 
-      _startPeriodicCapture();
+      await _startImageStream(controller);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -91,31 +94,47 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     }
   }
 
-  void _startPeriodicCapture() {
-    _captureTimer?.cancel();
-    _captureTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
-      await _captureAndDetect();
-    });
+  Future<void> _startImageStream(CameraController controller) async {
+    if (controller.value.isStreamingImages) return;
+    await controller.startImageStream(_handleCameraImage);
   }
 
-  Future<void> _captureAndDetect() async {
+  void _handleCameraImage(CameraImage cameraImage) {
     final controller = _controller;
     if (_isDisposed || !mounted || controller == null) return;
     if (!controller.value.isInitialized || _isProcessing) return;
-    if (controller.value.isTakingPicture) return;
 
+    final now = DateTime.now();
+    final lastStartedAt = _lastInferenceStartedAt;
+    if (lastStartedAt != null &&
+        now.difference(lastStartedAt) < _minInferenceInterval) {
+      return;
+    }
+
+    _lastInferenceStartedAt = now;
     _isProcessing = true;
     if (mounted) setState(() {});
 
+    unawaited(_detectCameraImage(cameraImage));
+  }
+
+  Future<void> _detectCameraImage(CameraImage cameraImage) async {
     try {
-      final file = await controller.takePicture();
-      final bytes = await file.readAsBytes();
+      final controller = _controller;
+      if (controller == null) return;
+
+      final bytes = ImageService.convertCameraImage(
+        cameraImage,
+        rotationDegrees: controller.description.sensorOrientation,
+        mirrorHorizontally:
+            controller.description.lensDirection == CameraLensDirection.front,
+      );
 
       if (_isDisposed || !mounted) return;
       await ref.read(detectorNotifierProvider.notifier).detectImage(bytes);
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Error capturing picture: $e');
+        debugPrint('Error processing camera frame: $e');
       }
     } finally {
       _isProcessing = false;
@@ -124,13 +143,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 
   Future<void> _disposeCamera() async {
-    _captureTimer?.cancel();
-    _captureTimer = null;
-
     final controller = _controller;
     _controller = null;
+    _lastInferenceStartedAt = null;
 
     if (controller != null) {
+      if (controller.value.isInitialized &&
+          controller.value.isStreamingImages) {
+        await controller.stopImageStream();
+      }
       await controller.dispose();
     }
   }
@@ -156,14 +177,34 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (_cameraError != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Quét Real-time')),
-        body: Center(child: Text(_cameraError!)),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.videocam_off, color: Colors.red.shade700, size: 40),
+                const SizedBox(height: 12),
+                Text(
+                  _cameraError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _initializeCamera,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
     if (_controller == null || !_controller!.value.isInitialized) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final screenSize = MediaQuery.sizeOf(context);
@@ -213,10 +254,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             ),
           ),
           if (_isProcessing)
-            const Positioned(
-              top: 16,
+            Positioned(
+              top: state.errorMessage == null ? 16 : 88,
               right: 16,
-              child: Chip(label: Text('Đang quét...')),
+              child: const Chip(label: Text('Đang quét...')),
+            ),
+          if (state.errorMessage != null)
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: _CameraErrorBanner(
+                message: state.errorMessage!,
+                onDismiss: () {
+                  ref.read(detectorNotifierProvider.notifier).clearError();
+                },
+              ),
             ),
           Positioned(
             bottom: 30,
@@ -261,5 +314,47 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_disposeCamera());
     super.dispose();
+  }
+}
+
+class _CameraErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _CameraErrorBanner({required this.message, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.red.shade50,
+      borderRadius: BorderRadius.circular(8),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.red.shade900,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Dismiss',
+              onPressed: onDismiss,
+              icon: const Icon(Icons.close),
+              color: Colors.red.shade700,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

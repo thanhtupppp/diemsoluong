@@ -7,6 +7,8 @@ import '../../domain/services/tracker.dart';
 
 class IouTracker implements Tracker {
   final double iouThreshold;
+  final double centerDistanceThresholdFactor;
+  final double minCenterDistanceThreshold;
   final int maxLostFrames;
   final int maxPathLength;
 
@@ -16,6 +18,8 @@ class IouTracker implements Tracker {
 
   IouTracker({
     this.iouThreshold = 0.3,
+    this.centerDistanceThresholdFactor = 1.5,
+    this.minCenterDistanceThreshold = 32.0,
     this.maxLostFrames = 5,
     this.maxPathLength = 20,
   });
@@ -46,10 +50,10 @@ class IouTracker implements Tracker {
     final matchedTracks = List<bool>.filled(_activeTracks.length, false);
     final updatedTracks = <Track>[];
 
-    // So khớp dựa trên IoU cao nhất
+    // Match by IoU first, with center-distance fallback for low-FPS jumps.
     for (int i = 0; i < _activeTracks.length; i++) {
       final track = _activeTracks[i];
-      double maxIou = -1.0;
+      double bestMatchScore = -1.0;
       int bestMatchIdx = -1;
 
       for (int j = 0; j < detections.length; j++) {
@@ -59,8 +63,24 @@ class IouTracker implements Tracker {
         if (track.classId != detection.classId) continue;
 
         final iou = _calculateIoU(track.rect, detection.rect);
-        if (iou > maxIou && iou >= iouThreshold) {
-          maxIou = iou;
+        final centerDistance = _calculateCenterDistance(
+          track.rect,
+          detection.rect,
+        );
+        final centerDistanceThreshold = _calculateCenterDistanceThreshold(
+          track.rect,
+          detection.rect,
+        );
+
+        if (iou < iouThreshold && centerDistance > centerDistanceThreshold) {
+          continue;
+        }
+
+        final matchScore = iou >= iouThreshold
+            ? 1.0 + iou
+            : 1.0 - (centerDistance / centerDistanceThreshold);
+        if (matchScore > bestMatchScore) {
+          bestMatchScore = matchScore;
           bestMatchIdx = j;
         }
       }
@@ -161,5 +181,24 @@ class IouTracker implements Tracker {
 
     if (unionArea <= 0.0) return 0.0;
     return intersectionArea / unionArea;
+  }
+
+  double _calculateCenterDistance(Rect rectA, Rect rectB) {
+    final centerA = rectA.center;
+    final centerB = rectB.center;
+    final dx = centerA.dx - centerB.dx;
+    final dy = centerA.dy - centerB.dy;
+    return sqrt(dx * dx + dy * dy);
+  }
+
+  double _calculateCenterDistanceThreshold(Rect rectA, Rect rectB) {
+    final maxObjectDimension = max(
+      max(rectA.width, rectA.height),
+      max(rectB.width, rectB.height),
+    );
+    return max(
+      minCenterDistanceThreshold,
+      maxObjectDimension * centerDistanceThresholdFactor,
+    );
   }
 }

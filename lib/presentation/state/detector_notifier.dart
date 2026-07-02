@@ -6,6 +6,7 @@ import '../../data/models/detection.dart';
 import '../../features/counting/data/counters/line_cross_counter.dart';
 import '../../features/counting/domain/entities/counting_line.dart';
 import '../../features/counting/domain/services/counter.dart';
+import '../../features/detection/data/services/image_service.dart';
 import '../../features/detection/data/services/tflite_service.dart';
 import '../../features/export/data/exporters/csv_exporter.dart';
 import '../../features/export/data/exporters/json_exporter.dart';
@@ -17,6 +18,8 @@ import '../../features/model_management/domain/repositories/model_repository.dar
 import '../../features/tracking/data/trackers/iou_tracker.dart';
 import '../../features/tracking/domain/entities/track.dart';
 import '../../features/tracking/domain/services/tracker.dart';
+
+const _unset = Object();
 
 class DetectorState {
   final bool isLoading;
@@ -40,33 +43,39 @@ class DetectorState {
     this.countingLine = const CountingLine(
       id: 'central_line',
       name: 'Vạch Đếm Trung Tâm',
-      pointA: Offset(0, 320),
-      pointB: Offset(640, 320),
+      pointA: Offset(0, 0.5),
+      pointB: Offset(1, 0.5),
     ),
     this.errorMessage,
   });
 
   DetectorState copyWith({
     bool? isLoading,
-    Uint8List? imageBytes,
+    Object? imageBytes = _unset,
     List<Detection>? detections,
     List<Track>? tracks,
     Map<int, int>? classCounts,
     List<ModelInfo>? availableModels,
-    ModelInfo? selectedModel,
+    Object? selectedModel = _unset,
     CountingLine? countingLine,
-    String? errorMessage,
+    Object? errorMessage = _unset,
   }) {
     return DetectorState(
       isLoading: isLoading ?? this.isLoading,
-      imageBytes: imageBytes ?? this.imageBytes,
+      imageBytes: imageBytes == _unset
+          ? this.imageBytes
+          : imageBytes as Uint8List?,
       detections: detections ?? this.detections,
       tracks: tracks ?? this.tracks,
       classCounts: classCounts ?? this.classCounts,
       availableModels: availableModels ?? this.availableModels,
-      selectedModel: selectedModel ?? this.selectedModel,
+      selectedModel: selectedModel == _unset
+          ? this.selectedModel
+          : selectedModel as ModelInfo?,
       countingLine: countingLine ?? this.countingLine,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: errorMessage == _unset
+          ? this.errorMessage
+          : errorMessage as String?,
     );
   }
 }
@@ -80,11 +89,13 @@ final tfliteServiceProvider = Provider<TfliteService>((ref) {
 
 final csvExporterProvider = Provider<Exporter>((ref) => CsvExporter());
 final jsonExporterProvider = Provider<Exporter>((ref) => JsonExporter());
-final modelRepositoryProvider = Provider<ModelRepository>((ref) => ModelRepositoryImpl());
+final modelRepositoryProvider = Provider<ModelRepository>(
+  (ref) => ModelRepositoryImpl(),
+);
 
 class DetectorNotifier extends Notifier<DetectorState> {
   final Tracker _tracker = IouTracker();
-  late final Counter _counter;
+  late Counter _counter;
   late final ModelRepository _modelRepository;
 
   @override
@@ -92,8 +103,8 @@ class DetectorNotifier extends Notifier<DetectorState> {
     const defaultLine = CountingLine(
       id: 'central_line',
       name: 'Vạch Đếm Trung Tâm',
-      pointA: Offset(0, 320),
-      pointB: Offset(640, 320),
+      pointA: Offset(0, 0.5),
+      pointB: Offset(1, 0.5),
     );
     _counter = LineCrossCounter(line: defaultLine);
     _modelRepository = ref.read(modelRepositoryProvider);
@@ -117,6 +128,7 @@ class DetectorNotifier extends Notifier<DetectorState> {
       name: state.countingLine.name,
       pointA: pointA,
       pointB: pointB,
+      direction: state.countingLine.direction,
     );
     _counter = LineCrossCounter(line: newLine);
     state = state.copyWith(countingLine: newLine);
@@ -130,16 +142,17 @@ class DetectorNotifier extends Notifier<DetectorState> {
 
   Future<void> detectImage(Uint8List bytes) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
-    
+
     try {
       final tfliteService = ref.read(tfliteServiceProvider);
       final detections = await tfliteService.detectObjects(
         bytes,
         modelPath: state.selectedModel?.path,
       );
-      
+
       final tracks = _tracker.update(detections);
-      final countResult = _counter.process(tracks);
+      final imageSize = ImageService.decodeImageSize(bytes);
+      final countResult = _counter.process(tracks, imageSize: imageSize);
 
       state = state.copyWith(
         isLoading: false,
@@ -151,7 +164,7 @@ class DetectorNotifier extends Notifier<DetectorState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Lỗi nhận diện vật thể: $e',
+        errorMessage: 'Loi nhan dien vat the: $e',
       );
     }
   }
@@ -165,7 +178,10 @@ class DetectorNotifier extends Notifier<DetectorState> {
       'timestamp': DateTime.now().toIso8601String(),
       'selected_model': state.selectedModel?.name ?? 'unknown',
       'total_tracks': state.tracks.length,
-      'counted_tracks_total': state.classCounts.values.fold(0, (sum, val) => sum + val),
+      'counted_tracks_total': state.classCounts.values.fold(
+        0,
+        (sum, val) => sum + val,
+      ),
     };
 
     // Chi tiết đếm từng lớp nhãn
@@ -173,8 +189,13 @@ class DetectorNotifier extends Notifier<DetectorState> {
       exportDataMap['class_${classId}_count'] = count;
     });
 
-    final fileName = 'detection_report_${DateTime.now().millisecondsSinceEpoch}';
+    final fileName =
+        'detection_report_${DateTime.now().millisecondsSinceEpoch}';
     return exporter.exportData(fileName, exportDataMap);
+  }
+
+  void clearError() {
+    state = state.copyWith(errorMessage: null);
   }
 
   void clear() {
@@ -192,5 +213,5 @@ class DetectorNotifier extends Notifier<DetectorState> {
 
 final detectorNotifierProvider =
     NotifierProvider.autoDispose<DetectorNotifier, DetectorState>(() {
-  return DetectorNotifier();
-});
+      return DetectorNotifier();
+    });

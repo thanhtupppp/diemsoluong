@@ -4,12 +4,20 @@ import '../../../../data/models/detection.dart';
 import '../../../../data/models/model_config.dart';
 import '../isolates/inference_isolate.dart';
 
+typedef InferenceIsolateFactory = InferenceIsolate Function();
+
 class TfliteService {
-  final InferenceIsolate _isolate = InferenceIsolate();
+  final InferenceIsolateFactory _isolateFactory;
+  late InferenceIsolate _isolate;
 
   Future<void>? _initializing;
   bool _disposed = false;
   String _modelPath = ModelConfig.modelAssetPath;
+
+  TfliteService({InferenceIsolateFactory? isolateFactory})
+      : _isolateFactory = isolateFactory ?? InferenceIsolate.new {
+    _isolate = _isolateFactory();
+  }
 
   Future<void> initialize({String? modelPath}) async {
     if (_disposed) {
@@ -21,13 +29,16 @@ class TfliteService {
     if (_isolate.isReady && _modelPath == targetPath) return;
 
     if (_isolate.isReady) {
-      _isolate.dispose();
+      _replaceIsolate();
     }
 
     _modelPath = targetPath;
     _initializing = _isolate.init(_modelPath);
     try {
       await _initializing;
+    } catch (_) {
+      _replaceIsolate();
+      rethrow;
     } finally {
       _initializing = null;
     }
@@ -54,7 +65,7 @@ class TfliteService {
       );
     } catch (e) {
       // Tự động khôi phục isolate khi gặp lỗi hoặc timeout bằng cách giải phóng tài nguyên lỗi
-      _isolate.dispose();
+      _replaceIsolate();
       _initializing = null;
       rethrow;
     }
@@ -64,5 +75,10 @@ class TfliteService {
     if (_disposed) return;
     _disposed = true;
     _isolate.dispose();
+  }
+
+  void _replaceIsolate() {
+    _isolate.dispose();
+    _isolate = _isolateFactory();
   }
 }

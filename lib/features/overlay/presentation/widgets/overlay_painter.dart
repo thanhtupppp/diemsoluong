@@ -27,11 +27,7 @@ class OverlayPainter extends CustomPainter {
     canvas.clipRect(Offset.zero & size);
 
     // 1. Tính toán tỉ lệ scale và dịch chuyển offset để vẽ khít màn hình (contain fit)
-    final fittedSizes = applyBoxFit(
-      BoxFit.contain,
-      originalImageSize,
-      size,
-    );
+    final fittedSizes = applyBoxFit(BoxFit.contain, originalImageSize, size);
 
     final destinationSize = fittedSizes.destination;
     final dx = (size.width - destinationSize.width) / 2;
@@ -61,8 +57,7 @@ class OverlayPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0;
 
-    final bgPaint = Paint()
-      ..style = PaintingStyle.fill;
+    final bgPaint = Paint()..style = PaintingStyle.fill;
 
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
@@ -107,8 +102,9 @@ class OverlayPainter extends CustomPainter {
       final labelHeight = textPainter.height + verticalPadding * 2;
 
       final labelLeft = mappedRect.left.clamp(0.0, size.width - labelWidth);
-      final rawTop =
-          mappedRect.top - labelHeight >= 0 ? mappedRect.top - labelHeight : mappedRect.top;
+      final rawTop = mappedRect.top - labelHeight >= 0
+          ? mappedRect.top - labelHeight
+          : mappedRect.top;
       final labelTop = rawTop.clamp(0.0, size.height - labelHeight);
 
       final labelRect = Rect.fromLTWH(
@@ -125,10 +121,7 @@ class OverlayPainter extends CustomPainter {
 
       textPainter.paint(
         canvas,
-        Offset(
-          labelLeft + horizontalPadding,
-          labelTop + verticalPadding,
-        ),
+        Offset(labelLeft + horizontalPadding, labelTop + verticalPadding),
       );
     }
   }
@@ -154,17 +147,11 @@ class OverlayPainter extends CustomPainter {
 
       final path = Path();
       final firstPoint = track.path.first;
-      path.moveTo(
-        firstPoint.dx * scaleX + dx,
-        firstPoint.dy * scaleY + dy,
-      );
+      path.moveTo(firstPoint.dx * scaleX + dx, firstPoint.dy * scaleY + dy);
 
       for (int i = 1; i < track.path.length; i++) {
         final point = track.path[i];
-        path.lineTo(
-          point.dx * scaleX + dx,
-          point.dy * scaleY + dy,
-        );
+        path.lineTo(point.dx * scaleX + dx, point.dy * scaleY + dy);
       }
 
       canvas.drawPath(path, paint);
@@ -195,10 +182,12 @@ class OverlayPainter extends CustomPainter {
       ..color = Colors.tealAccent
       ..strokeWidth = 4.0;
 
-    final startX = line.pointA.dx * scaleX + dx;
-    final startY = line.pointA.dy * scaleY + dy;
-    final endX = line.pointB.dx * scaleX + dx;
-    final endY = line.pointB.dy * scaleY + dy;
+    final pointA = line.pointAInImage(originalImageSize);
+    final pointB = line.pointBInImage(originalImageSize);
+    final startX = pointA.dx * scaleX + dx;
+    final startY = pointA.dy * scaleY + dy;
+    final endX = pointB.dx * scaleX + dx;
+    final endY = pointB.dy * scaleY + dy;
 
     canvas.drawLine(Offset(startX, startY), Offset(endX, endY), paint);
 

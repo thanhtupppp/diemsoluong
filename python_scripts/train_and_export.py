@@ -1,9 +1,10 @@
 import os
+import multiprocessing
+import torch
 from roboflow import Roboflow
 from ultralytics import YOLO
 
 def main():
-    # Điền thông tin API Roboflow của bạn tại đây
     api_key = "YOUR_ROBOFLOW_API_KEY"
     workspace_name = "workspace-id"
     project_name = "project-id"
@@ -21,29 +22,34 @@ def main():
         print(f"Lỗi tải dataset (Vui lòng thay API key hợp lệ): {e}")
         return
 
-    print("\n--- 2. Khởi tạo mô hình YOLOv8n ---")
+    device = 0 if torch.cuda.is_available() else 'cpu'
+    print(f"\n--- 2. Khởi tạo mô hình YOLOv8n (device={device}) ---")
     model = YOLO('yolov8n.pt')
 
     print("\n--- 3. Huấn luyện mô hình ---")
-    model.train(data=data_yaml, epochs=100, imgsz=640, device=0)
+    model.train(
+        data=data_yaml,
+        epochs=100,
+        imgsz=640,
+        device=device,
+        batch=16,
+        patience=20,
+        name='object_counter_v1',
+    )
 
     print("\n--- 4. Đánh giá mô hình ---")
     metrics = model.val()
     print(f"mAP50-95: {metrics.box.map}")
 
     print("\n--- 5. Xuất mô hình sang LiteRT (.tflite) ---")
-    # FP32 Baseline
     model.export(format='litert', imgsz=640)
-    
-    # FP16 - Khuyên dùng cho Release đầu tiên
     print("Exporting Float16 quantized model...")
     model.export(format='litert', imgsz=640, half=True)
-    
-    # INT8 Quantized - Phải có data.yaml
     print("Exporting INT8 quantized model (with representative data)...")
     model.export(format='litert', imgsz=640, int8=True, data=data_yaml)
-    
-    print("\nQuá trình hoàn tất! Kiểm tra thư mục runs/detect/train/weights/ để lấy file mô hình.")
+
+    print("\nQuá trình hoàn tất! Kiểm tra thư mục runs/detect/object_counter_v1/weights/ để lấy file mô hình.")
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
     main()

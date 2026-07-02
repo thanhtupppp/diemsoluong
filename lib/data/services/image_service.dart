@@ -57,7 +57,10 @@ class ImageService {
     final padLeft = dw / 2.0;
     final padTop = dh / 2.0;
 
-    img.compositeImage(canvas, resized, dstX: padLeft.floor(), dstY: padTop.floor());
+    final dstX = padLeft.floor();
+    final dstY = padTop.floor();
+
+    img.compositeImage(canvas, resized, dstX: dstX, dstY: dstY);
 
     final floatBuffer = Float32List(targetSize * targetSize * 3);
     int index = 0;
@@ -76,8 +79,8 @@ class ImageService {
       originalWidth: originalWidth,
       originalHeight: originalHeight,
       scale: scale,
-      padX: padLeft,
-      padY: padTop,
+      padX: dstX.toDouble(),
+      padY: dstY.toDouble(),
     );
   }
 

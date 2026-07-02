@@ -8,8 +8,8 @@ import 'package:diemsoluong/domain/usecases/nms_filter.dart';
 void main() {
   group('YOLOv8 Decode Tests', () {
     test('decodeDetections parses flat Float32List correctly', () {
-      final numBoxes = 3;
-      final numClasses = 1;
+      const numBoxes = 3;
+      const numClasses = 1;
       // Kích thước phẳng: (4 + 1) * 3 = 15 phần tử
       // Row 0: x_center -> [0.5, 0.2, 0.9]
       // Row 1: y_center -> [0.5, 0.2, 0.9]
@@ -40,9 +40,9 @@ void main() {
   group('NMS Filter Tests', () {
     test('applyNMS filters overlapping boxes', () {
       final detections = [
-        Detection(rect: const Rect.fromLTWH(100, 100, 50, 50), classId: 0, score: 0.9),
-        Detection(rect: const Rect.fromLTWH(105, 105, 50, 50), classId: 0, score: 0.8), // Overlapping
-        Detection(rect: const Rect.fromLTWH(300, 300, 50, 50), classId: 0, score: 0.85), // Non-overlapping
+        const Detection(rect: Rect.fromLTWH(100, 100, 50, 50), classId: 0, score: 0.9),
+        const Detection(rect: Rect.fromLTWH(105, 105, 50, 50), classId: 0, score: 0.8), // Overlapping
+        const Detection(rect: Rect.fromLTWH(300, 300, 50, 50), classId: 0, score: 0.85), // Non-overlapping
       ];
 
       final filtered = applyNMS(detections, 0.45);

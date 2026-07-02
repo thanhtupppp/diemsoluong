@@ -38,7 +38,7 @@ final tfliteServiceProvider = Provider<TfliteService>((ref) {
   return service;
 });
 
-class DetectorNotifier extends AutoDisposeNotifier<DetectorState> {
+class DetectorNotifier extends Notifier<DetectorState> {
   @override
   DetectorState build() {
     return DetectorState();

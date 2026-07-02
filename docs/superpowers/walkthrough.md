@@ -92,3 +92,7 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
 - **Stage 9 (Model Management Selector UI)**: Enabled dynamic model reloading in the persistent isolate background thread and added Dropdown selector to the `HomeScreen` appBar.
 - **Stage 10 (Interactive UI - Drag/Draw Counting Line)**: Implemented `InteractiveLineOverlay` mapping touch-drag deltas, reactively updating the state and math boundaries in real-time.
 - **Stage 11 (Production UI/UX - Classification Stats Dashboard)**: Implemented `StatsDashboard` with BackdropFilter blur and colored per-class count chips, overlaying it on `HomeScreen` and `CameraScreen`.
+- **Stage 12 (Robustness & Recovery)**:
+  - Added a 5-second timeout to the `responsePort.first` stream inside `InferenceIsolate.runInference(...)`.
+  - Implemented isolate auto-recovery inside `TfliteService.detectObjects(...)` by catching exceptions and executing cleanup tasks.
+  - Added full test coverage for tracking and counting logic via [iou_tracker_test.dart](file:///d:/diemsoluong/test/features/tracking/iou_tracker_test.dart) and [line_cross_counter_test.dart](file:///d:/diemsoluong/test/features/counting/line_cross_counter_test.dart).

@@ -6,7 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../data/models/model_config.dart';
 import '../state/detector_notifier.dart';
 import '../../features/detection/presentation/widgets/detector_painter.dart';
-import 'camera_screen.dart';
+import '../../features/camera/presentation/screens/camera_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});

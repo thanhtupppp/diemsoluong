@@ -18,8 +18,11 @@ class TfliteService {
     if (_isolate.isReady) return;
 
     _initializing ??= _isolate.init();
-    await _initializing;
-    _initializing = null;
+    try {
+      await _initializing;
+    } finally {
+      _initializing = null;
+    }
   }
 
   Future<List<Detection>> detectObjects(

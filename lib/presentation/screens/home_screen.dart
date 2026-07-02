@@ -105,18 +105,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             if (state.tracks.isNotEmpty && !state.isLoading)
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+                padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 20),
                 color: Colors.teal.shade50,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Phát hiện: ${state.tracks.length} | Đã đếm qua vạch: ${state.classCounts.values.fold(0, (sum, val) => sum + val)}',
-                      style: const TextStyle(
-                        fontSize: 18.0,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal,
+                    Expanded(
+                      child: Text(
+                        'Phát hiện: ${state.tracks.length} | Đã đếm qua vạch: ${state.classCounts.values.fold(0, (sum, val) => sum + val)}',
+                        style: const TextStyle(
+                          fontSize: 14.0,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.teal,
+                        ),
                       ),
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          tooltip: 'Xuất CSV',
+                          icon: const Icon(Icons.file_download, color: Colors.teal),
+                          onPressed: () async {
+                            final job = await ref
+                                .read(detectorNotifierProvider.notifier)
+                                .exportCurrentData('csv');
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(job.isSuccess
+                                      ? 'Xuất CSV thành công: ${job.filePath}'
+                                      : 'Xuất CSV thất bại'),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                        IconButton(
+                          tooltip: 'Xuất JSON',
+                          icon: const Icon(Icons.code, color: Colors.teal),
+                          onPressed: () async {
+                            final job = await ref
+                                .read(detectorNotifierProvider.notifier)
+                                .exportCurrentData('json');
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(job.isSuccess
+                                      ? 'Xuất JSON thành công: ${job.filePath}'
+                                      : 'Xuất JSON thất bại'),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),

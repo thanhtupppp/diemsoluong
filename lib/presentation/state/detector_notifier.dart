@@ -7,6 +7,10 @@ import '../../features/counting/data/counters/line_cross_counter.dart';
 import '../../features/counting/domain/entities/counting_line.dart';
 import '../../features/counting/domain/services/counter.dart';
 import '../../features/detection/data/services/tflite_service.dart';
+import '../../features/export/data/exporters/csv_exporter.dart';
+import '../../features/export/data/exporters/json_exporter.dart';
+import '../../features/export/domain/entities/export_job.dart';
+import '../../features/export/domain/services/exporter.dart';
 import '../../features/tracking/data/trackers/iou_tracker.dart';
 import '../../features/tracking/domain/entities/track.dart';
 import '../../features/tracking/domain/services/tracker.dart';
@@ -54,6 +58,9 @@ final tfliteServiceProvider = Provider<TfliteService>((ref) {
   return service;
 });
 
+final csvExporterProvider = Provider<Exporter>((ref) => CsvExporter());
+final jsonExporterProvider = Provider<Exporter>((ref) => JsonExporter());
+
 class DetectorNotifier extends Notifier<DetectorState> {
   final Tracker _tracker = IouTracker();
   late final Counter _counter;
@@ -94,6 +101,26 @@ class DetectorNotifier extends Notifier<DetectorState> {
         errorMessage: 'Lỗi nhận diện vật thể: $e',
       );
     }
+  }
+
+  Future<ExportJob> exportCurrentData(String format) async {
+    final exporter = format == 'csv'
+        ? ref.read(csvExporterProvider)
+        : ref.read(jsonExporterProvider);
+
+    final exportDataMap = <String, dynamic>{
+      'timestamp': DateTime.now().toIso8601String(),
+      'total_tracks': state.tracks.length,
+      'counted_tracks_total': state.classCounts.values.fold(0, (sum, val) => sum + val),
+    };
+
+    // Chi tiết đếm từng lớp nhãn
+    state.classCounts.forEach((classId, count) {
+      exportDataMap['class_${classId}_count'] = count;
+    });
+
+    final fileName = 'detection_report_${DateTime.now().millisecondsSinceEpoch}';
+    return exporter.exportData(fileName, exportDataMap);
   }
 
   void clear() {

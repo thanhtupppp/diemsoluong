@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../data/models/detection.dart';
+import '../../data/models/model_config.dart';
 
 class DetectorPainter extends CustomPainter {
   final List<Detection> detections;
@@ -14,60 +16,107 @@ class DetectorPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Tính toán tỷ lệ scale và padding (Letterboxing)
-    final double scaleX = size.width / originalImageSize.width;
-    final double scaleY = size.height / originalImageSize.height;
-    
-    // Sử dụng BoxFit.contain để hiển thị ảnh, tính toán toạ độ thực tế vẽ lên canvas
-    final double scale = scaleX < scaleY ? scaleX : scaleY;
-    final double dx = (size.width - originalImageSize.width * scale) / 2;
-    final double dy = (size.height - originalImageSize.height * scale) / 2;
+    if (originalImageSize.isEmpty) return;
 
-    final paint = Paint()
+    final fittedSizes = applyBoxFit(
+      BoxFit.contain,
+      originalImageSize,
+      size,
+    );
+
+    final destinationSize = fittedSizes.destination;
+    final dx = (size.width - destinationSize.width) / 2;
+    final dy = (size.height - destinationSize.height) / 2;
+
+    final scaleX = destinationSize.width / originalImageSize.width;
+    final scaleY = destinationSize.height / originalImageSize.height;
+
+    final boxPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0;
 
+    final bgPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.black.withValues(alpha: 0.65);
+
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
+      maxLines: 1,
     );
 
     for (final detection in detections) {
-      // Map toạ độ từ [0 - 640] của YOLOv8 sang kích thước ảnh scale thực tế
       final rect = detection.rect;
-      final double left = (rect.left / 640.0) * originalImageSize.width * scale + dx;
-      final double top = (rect.top / 640.0) * originalImageSize.height * scale + dy;
-      final double width = (rect.width / 640.0) * originalImageSize.width * scale;
-      final double height = (rect.height / 640.0) * originalImageSize.height * scale;
+
+      final left =
+          (rect.left / ModelConfig.inputSize) * originalImageSize.width * scaleX + dx;
+      final top =
+          (rect.top / ModelConfig.inputSize) * originalImageSize.height * scaleY + dy;
+      final width =
+          (rect.width / ModelConfig.inputSize) * originalImageSize.width * scaleX;
+      final height =
+          (rect.height / ModelConfig.inputSize) * originalImageSize.height * scaleY;
 
       final mappedRect = Rect.fromLTWH(left, top, width, height);
 
-      // Chọn màu vẽ ngẫu nhiên dựa trên classId
-      paint.color = Colors.primaries[detection.classId % Colors.primaries.length];
-      canvas.drawRect(mappedRect, paint);
+      final color =
+          Colors.primaries[detection.classId % Colors.primaries.length];
+      boxPaint.color = color;
 
-      // Vẽ text Label + Score
-      final String labelName = detection.classId < labels.length 
-          ? labels[detection.classId] 
+      canvas.drawRect(mappedRect, boxPaint);
+
+      final labelName = detection.classId < labels.length
+          ? labels[detection.classId]
           : 'Class ${detection.classId}';
-      final String labelText = '$labelName (${(detection.score * 100).toStringAsFixed(0)}%)';
-      
+      final labelText =
+          '$labelName ${(detection.score * 100).toStringAsFixed(0)}%';
+
       textPainter.text = TextSpan(
         text: labelText,
-        style: TextStyle(
-          color: paint.color,
-          fontSize: 12.0,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
           fontWeight: FontWeight.bold,
-          backgroundColor: Colors.black.withValues(alpha: 0.6),
         ),
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(mappedRect.left, mappedRect.top - 15));
+
+      const horizontalPadding = 6.0;
+      const verticalPadding = 4.0;
+
+      final labelWidth = textPainter.width + horizontalPadding * 2;
+      final labelHeight = textPainter.height + verticalPadding * 2;
+
+      final labelLeft = mappedRect.left.clamp(0.0, size.width - labelWidth);
+      final labelTop = mappedRect.top - labelHeight >= 0
+          ? mappedRect.top - labelHeight
+          : mappedRect.top;
+
+      final labelRect = Rect.fromLTWH(
+        labelLeft,
+        labelTop,
+        labelWidth,
+        labelHeight,
+      );
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(labelRect, const Radius.circular(4)),
+        bgPaint..color = color.withValues(alpha: 0.85),
+      );
+
+      textPainter.paint(
+        canvas,
+        Offset(
+          labelLeft + horizontalPadding,
+          labelTop + verticalPadding,
+        ),
+      );
     }
   }
 
   @override
   bool shouldRepaint(covariant DetectorPainter oldDelegate) {
     return oldDelegate.detections != detections ||
-        oldDelegate.originalImageSize != originalImageSize;
+        oldDelegate.originalImageSize != originalImageSize ||
+        oldDelegate.labels != labels;
   }
 }

@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import '../../core/isolate/inference_isolate.dart';
-import '../../data/models/detection.dart';
-import '../../data/models/model_config.dart';
+import '../../../../data/models/detection.dart';
+import '../../../../data/models/model_config.dart';
+import '../isolates/inference_isolate.dart';
 
 class TfliteService {
   final InferenceIsolate _isolate = InferenceIsolate();

@@ -8,11 +8,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
-import '../../data/models/detection.dart';
-import '../../data/models/model_config.dart';
-import '../../data/services/image_service.dart';
-import '../../domain/usecases/decode_yolo_output.dart';
-import '../../domain/usecases/nms_filter.dart';
+import '../../../../data/models/detection.dart';
+import '../../../../data/models/model_config.dart';
+import '../../domain/usecases/decode_detections.dart';
+import '../../domain/usecases/apply_nms.dart';
+import '../services/image_service.dart';
 
 class InferenceRequest {
   final Uint8List imageBytes;

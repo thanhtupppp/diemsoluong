@@ -34,6 +34,7 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
 
 ### 5. TFLite Service Lifecycle Guards
 - **Initialization Race Lock**: Configured [tflite_service.dart](file:///d:/diemsoluong/lib/data/services/tflite_service.dart) with `Future<void>? _initializing` lock. When multiple async calls to `detectObjects()` trigger concurrently, only one initialization Future is spawned and awaited, resolving race conditions.
+- **Initialization Retry Safe**: Wrapped the initialization await inside a `try`/`finally` block to clear the `_initializing` future handle on errors, allowing callers to retry startup if initialization fails.
 - **State Dispose Guards**: Added an explicit `_disposed` flag constraint. Invoking operations on `TfliteService` after it has been disposed triggers a fast-failing `StateError` immediately rather than attempting isolate messages on dead resources.
 
 ### 6. Optimized Bounding Box Painter (DetectorPainter) & Value Equality

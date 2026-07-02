@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 
 import '../../../../data/models/detection.dart';
 
-class DetectorPainter extends CustomPainter {
+class OverlayPainter extends CustomPainter {
   final List<Detection> detections;
   final Size originalImageSize;
   final List<String> labels;
 
-  DetectorPainter({
+  OverlayPainter({
     required this.detections,
     required this.originalImageSize,
     required this.labels,
@@ -21,6 +21,7 @@ class DetectorPainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(Offset.zero & size);
 
+    // 1. Tính toán tỉ lệ scale và dịch chuyển offset để vẽ khít màn hình (contain fit)
     final fittedSizes = applyBoxFit(
       BoxFit.contain,
       originalImageSize,
@@ -34,6 +35,23 @@ class DetectorPainter extends CustomPainter {
     final scaleX = destinationSize.width / originalImageSize.width;
     final scaleY = destinationSize.height / originalImageSize.height;
 
+    // 2. Thực hiện vẽ các lớp thành phần trong cảnh (Overlay Scene)
+    _drawCountingLines(canvas, size, dx, dy, scaleX, scaleY);
+    _drawTracks(canvas, size, dx, dy, scaleX, scaleY);
+    _drawDetections(canvas, size, dx, dy, scaleX, scaleY);
+
+    canvas.restore();
+  }
+
+  /// Vẽ danh sách hộp giới hạn (Bounding Boxes) và điểm tin cậy
+  void _drawDetections(
+    Canvas canvas,
+    Size size,
+    double dx,
+    double dy,
+    double scaleX,
+    double scaleY,
+  ) {
     final boxPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0;
@@ -110,12 +128,34 @@ class DetectorPainter extends CustomPainter {
         ),
       );
     }
+  }
 
-    canvas.restore();
+  /// Placeholder vẽ các đường tracking bám vết đối tượng vật lý (Phát triển sau ở Giai đoạn 4)
+  void _drawTracks(
+    Canvas canvas,
+    Size size,
+    double dx,
+    double dy,
+    double scaleX,
+    double scaleY,
+  ) {
+    // Sẽ vẽ đường theo vết chuyển động của từng đối tượng bám đuôi
+  }
+
+  /// Placeholder vẽ vạch giới hạn đếm hoặc vùng đếm đối tượng (Phát triển sau ở Giai đoạn 4)
+  void _drawCountingLines(
+    Canvas canvas,
+    Size size,
+    double dx,
+    double dy,
+    double scaleX,
+    double scaleY,
+  ) {
+    // Sẽ vẽ vạch cắt ngang màn hình hoặc khu vực kích hoạt đếm
   }
 
   @override
-  bool shouldRepaint(covariant DetectorPainter oldDelegate) {
+  bool shouldRepaint(covariant OverlayPainter oldDelegate) {
     return !listEquals(oldDelegate.detections, detections) ||
         oldDelegate.originalImageSize != originalImageSize ||
         !listEquals(oldDelegate.labels, labels);

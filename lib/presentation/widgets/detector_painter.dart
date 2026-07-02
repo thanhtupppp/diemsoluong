@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/models/detection.dart';
-import '../../data/models/model_config.dart';
 
 class DetectorPainter extends CustomPainter {
   final List<Detection> detections;
@@ -51,14 +50,10 @@ class DetectorPainter extends CustomPainter {
     for (final detection in detections) {
       final rect = detection.rect;
 
-      final left =
-          (rect.left / ModelConfig.inputSize) * originalImageSize.width * scaleX + dx;
-      final top =
-          (rect.top / ModelConfig.inputSize) * originalImageSize.height * scaleY + dy;
-      final width =
-          (rect.width / ModelConfig.inputSize) * originalImageSize.width * scaleX;
-      final height =
-          (rect.height / ModelConfig.inputSize) * originalImageSize.height * scaleY;
+      final left = rect.left * scaleX + dx;
+      final top = rect.top * scaleY + dy;
+      final width = rect.width * scaleX;
+      final height = rect.height * scaleY;
 
       final mappedRect = Rect.fromLTWH(left, top, width, height);
 

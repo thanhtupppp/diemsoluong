@@ -168,17 +168,26 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       appBar: AppBar(title: const Text('Quét Real-time')),
       body: Stack(
         children: [
-          Positioned.fill(child: CameraPreview(_controller!)),
-          if (state.detections.isNotEmpty && _previewSize != null)
-            Positioned.fill(
-              child: CustomPaint(
-                painter: DetectorPainter(
-                  detections: state.detections,
-                  originalImageSize: _previewSize!,
-                  labels: ModelConfig.cocoLabels,
-                ),
+          Center(
+            child: AspectRatio(
+              aspectRatio: 1 / _controller!.value.aspectRatio,
+              child: Stack(
+                children: [
+                  Positioned.fill(child: CameraPreview(_controller!)),
+                  if (state.detections.isNotEmpty && _previewSize != null)
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: DetectorPainter(
+                          detections: state.detections,
+                          originalImageSize: _previewSize!,
+                          labels: ModelConfig.cocoLabels,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
+          ),
           if (_isProcessing)
             const Positioned(
               top: 16,

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../data/models/detection.dart';
+import '../../../../data/models/detection.dart';
 
 class DetectorPainter extends CustomPainter {
   final List<Detection> detections;

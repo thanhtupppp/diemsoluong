@@ -1,212 +1,183 @@
-# Real-Time Object Detection & Counting App (YOLOv8 + LiteRT)
+# Real-Time Object Detection & Counting App
 
-Ứng dụng đếm số lượng vật thể thời gian thực sử dụng mô hình YOLOv8 được tối ưu hóa qua TensorFlow Lite (LiteRT) trên nền tảng Flutter. Dự án hỗ trợ khả năng phân tích luồng camera snapshot, xử lý tác vụ nặng qua luồng Isolate riêng biệt nhằm đảm bảo UI mượt mà 60 FPS, và tự động căn chỉnh tọa độ hộp giới hạn (Bounding Box) chính xác theo kích thước ảnh gốc.
+Flutter app for on-device object detection and counting with YOLOv8 exported to TensorFlow Lite. The app supports still-image detection, live camera scanning, object tracking, line-cross counting, overlay rendering, and CSV/JSON export.
 
----
+## Features
 
-## 1. Project Overview
+- Still image detection from gallery or camera capture.
+- Live camera scanning with `CameraController.startImageStream`.
+- YUV420, NV21, BGRA8888, and JPEG camera frame conversion.
+- Letterbox preprocessing to preserve aspect ratio before model inference.
+- TFLite inference in a Dart isolate with recovery after worker errors/timeouts.
+- YOLO output decoding with configurable box coordinate format: normalized or pixel-space.
+- Class-aware Non-Maximum Suppression.
+- IoU tracker with center-distance fallback for low-FPS object jumps.
+- Normalized counting line coordinates, draggable line handles, and direction-aware counting.
+- Canvas overlay for boxes, track paths, labels, confidence, and counting line.
+- CSV and JSON export for detection/count reports.
 
-Ứng dụng này giải quyết bài toán nhận diện và đếm số lượng vật thể tự động (ví dụ: đếm hàng hóa, đếm sản phẩm trên băng chuyền, hoặc đếm thiết bị).
+## Current Model
 
-### Key Features
+The default model is declared in `pubspec.yaml`:
 
-- **Real-Time Camera Scanning**: Chụp ảnh luồng định kỳ (1 FPS) từ camera để phân tích nhận diện mà không gây nóng máy hoặc giật lag luồng giao diện chính.
-- **Letterbox Preprocessing**: Tự động thay đổi kích thước ảnh giữ nguyên tỷ lệ aspect ratio và bù đệm xám (padding 114) chuẩn hóa ảnh đầu vào mô hình YOLOv8.
-- **Isolate-Based Inference**: Chạy tiến trình suy luận TensorFlow Lite trong nền thông qua Dart Isolate độc lập kết hợp `BackgroundIsolateBinaryMessenger`.
-- **Value-Object Bounding Boxes**: Giải mã kết quả Tensor và lọc trùng lắp bằng thuật toán Non-Maximum Suppression (NMS) với độ chính xác cao.
-- **Canvas-Level Overlay**: Tự động chuyển đổi tọa độ hộp từ không gian model về kích thước thực tế hiển thị trên màn hình sử dụng cơ chế `applyBoxFit(BoxFit.contain)`.
+```yaml
+assets:
+  - assets/models/yolov8n_float16.tflite
+```
 
----
+Runtime config lives in `lib/data/models/model_config.dart`:
 
-## 2. System Architecture
+- Input size: `640`
+- Model path: `assets/models/yolov8n_float16.tflite`
+- Labels: COCO labels
+- Default confidence threshold: `0.25`
+- Default IoU threshold: `0.45`
+- Box coordinate format: `BoxCoordinateFormat.normalized`
 
-Hệ thống được chia thành 3 lớp chính: **Presentation Layer**, **Domain Layer** (Use Cases), và **Data Layer** (Services/Models).
+If a custom TFLite model outputs boxes in pixel coordinates instead of normalized coordinates, update `ModelConfig.boxCoordinateFormat` to `BoxCoordinateFormat.pixels`.
 
-### Luồng xử lý dữ liệu hiện tại (Data Pipeline)
+## Architecture
 
 ```mermaid
 graph TD
-    A[Camera Vừa Chụp] -->|Bytes Ảnh| B(ImageService.preprocessImage)
-    B -->|Tỷ lệ Aspect Ratio & Padding| C[PreprocessResult]
-    C -->|Float32 phẳng| D[InferenceIsolate]
-    D -->|Interpreter.run| E[Raw Tensor Output]
-    E -->|decodeDetections| F[Model-space Boxes 0..640]
-    F -->|Unletterbox mapping| G[Original Image-space Boxes]
-    G -->|applyNMS| H[Filtered Detections]
-    H -->|SendPort| I[DetectorNotifier State]
-    I -->|Riverpod| J[CameraScreen UI]
-    J -->|Canvas Paint| K[DetectorPainter Overlay]
+    A[Gallery or Camera Frame] --> B[ImageService]
+    B --> C[Letterbox Preprocess]
+    C --> D[InferenceIsolate]
+    D --> E[TFLite Interpreter]
+    E --> F[decodeDetections]
+    F --> G[Unletterbox to Original Image Space]
+    G --> H[applyNMS]
+    H --> I[IouTracker]
+    I --> J[LineCrossCounter]
+    J --> K[DetectorNotifier]
+    K --> L[HomeScreen or CameraScreen]
+    L --> M[OverlayPainter]
 ```
 
-### Kiến trúc module hướng tương lai (Future Pipeline Blueprint)
+### Main Modules
 
-Để đáp ứng các bài toán sản xuất phức tạp hơn (ví dụ: bám đuôi đối tượng vật lý, tránh đếm trùng khi đối tượng di chuyển), hệ thống được thiết kế hướng tới luồng xử lý dạng hàng đợi:
+- `lib/features/detection`: image preprocessing, TFLite isolate, decode, NMS.
+- `lib/features/tracking`: object track IDs and path history.
+- `lib/features/counting`: normalized counting line and line-cross counting.
+- `lib/features/overlay`: canvas overlay and draggable counting line handles.
+- `lib/features/export`: CSV/JSON export.
+- `lib/features/model_management`: model metadata repository.
+- `lib/presentation/state`: Riverpod app state and workflow orchestration.
 
-```mermaid
-graph LR
-    Camera --> FrameQueue[Frame Queue]
-    FrameQueue --> Worker[Inference Worker]
-    Worker --> Tracker[Object Tracker]
-    Tracker --> Counter[Counter Logic]
-    Counter --> Overlay[Canvas Overlay]
-    Overlay --> Export[Data Export]
+## Live Camera Flow
+
+Live mode uses `startImageStream`, throttled to one inference request at a time. The current interval is controlled by `_minInferenceInterval` in `CameraScreen`.
+
+The stream frame is converted to JPEG bytes by `ImageService.convertCameraImage`, then reuses the same still-image preprocessing and inference path. This keeps one model pipeline for both still images and live camera frames.
+
+Physical-device testing is still required for camera orientation and mirror behavior because Android/iOS sensor orientation can vary by device.
+
+## Counting Behavior
+
+Counting lines are stored as normalized coordinates:
+
+- `(0, 0.5)` means left edge at vertical center.
+- `(1, 0.5)` means right edge at vertical center.
+
+The line is mapped to image pixels before counting and to view pixels before painting. Direction modes are:
+
+- `CountingDirection.any`
+- `CountingDirection.positive`
+- `CountingDirection.negative`
+
+## Training and Export
+
+Recommended workflow: train and export on Google Colab using:
+
+```text
+python_scripts/colab_yolov8_train_export.ipynb
 ```
 
----
+The notebook supports Roboflow datasets and YOLO-format ZIP datasets from Google Drive. It trains YOLOv8, validates metrics, exports `.tflite`, and prints TFLite input/output tensor details.
 
-## 3. Abstract Blueprints for Expansion
-
-Để khắc phục việc phụ thuộc cứng vào thư viện TensorFlow Lite và hỗ trợ cơ chế quản lý đa mô hình động (Dynamic Model Swap), dưới đây là sơ đồ thiết kế trừu tượng được đề xuất:
-
-### A. Detector Abstraction
-
-Tách biệt phần suy luận (Inference Engine) thông qua interface `Detector` chung:
-
-```dart
-abstract class Detector {
-  bool get isReady;
-  Future<void> init();
-  Future<List<Detection>> detect(Uint8List imageBytes, {
-    double confidenceThreshold,
-    double iouThreshold,
-  });
-  void dispose();
-}
-
-// Các triển khai cụ thể:
-class TfliteDetector implements Detector { ... }
-class OnnxDetector implements Detector { ... }
-class NcnnDetector implements Detector { ... }
-```
-
-### B. Model Manager & Loader
-
-Quản lý siêu dữ liệu mô hình và nạp tự động từ tệp tin hoặc máy chủ từ xa:
-
-```dart
-class ModelInfo {
-  final String id;
-  final String name;
-  final String modelPath;
-  final int inputSize;
-  final List<String> labels;
-
-  const ModelInfo({
-    required this.id,
-    required this.name,
-    required this.modelPath,
-    required this.inputSize,
-    required this.labels,
-  });
-}
-
-class ModelRepository {
-  Future<List<ModelInfo>> getAvailableModels();
-}
-
-class ModelLoader {
-  Future<Detector> load(ModelInfo info);
-}
-```
-
----
-
-## 4. Model Training & Export Guide
-
-Hệ thống mặc định sử dụng mô hình YOLOv8n (YOLOv8 Nano) do Ultralytics cung cấp.
-
-### A. Huấn luyện mô hình (Model Training)
-
-Huấn luyện mô hình nhận diện vật thể tùy chỉnh thông qua thư viện `ultralytics` bằng Python:
+Example training script:
 
 ```python
 from ultralytics import YOLO
 
-# Nạp mô hình pre-trained
-model = YOLO('yolov8n.pt')
-
-# Huấn luyện mô hình với tập dữ liệu custom
-results = model.train(
-    data='custom_dataset.yaml',
+model = YOLO("yolov8n.pt")
+model.train(
+    data="custom_dataset.yaml",
     epochs=100,
     imgsz=640,
-    device=0 # Dùng GPU CUDA
+    device=0,
 )
 ```
 
-### B. Xuất mô hình sang TensorFlow Lite (Model Export)
-
-Mô hình sau khi huấn luyện cần được xuất sang định dạng `.tflite` với kiểu dữ liệu `float32`:
+Example export:
 
 ```bash
-# Sử dụng CLI của Ultralytics
-yolo export model=runs/detect/train/weights/best.pt format=tflite imgsz=640 half=false
+yolo export model=runs/detect/train/weights/best.pt format=tflite imgsz=640 half=True
 ```
 
-**Output Tensor Format:**
+After export, place the model at:
 
-- Input: `[1, 640, 640, 3]` (RGB normalized to `[0.0, 1.0]`).
-- Output: `[1, 4 + num_classes, 8400]` (4 tọa độ đầu là `x_center, y_center, width, height` và các dòng tiếp theo chứa điểm tin cậy của các nhãn lớp).
+```text
+assets/models/yolov8n_float16.tflite
+```
 
----
+or update `ModelConfig.modelAssetPath` and `pubspec.yaml` to match the new file.
 
-## 5. Testing & Verification
+## Development
 
-Dự án triển khai mô hình kiểm thử tự động (Unit Tests) nghiêm ngặt tại thư mục `test/` nhằm tránh lỗi logic hồi quy (regression bugs).
-
-### Cấu trúc kiểm thử (Test Cases)
-
-- **`decode_yolo_output_test.dart`**: Kiểm tra tính chính xác của thuật toán giải mã đầu ra Tensor phẳng Float32List sang cấu trúc tọa độ Rect, kiểm thử tính an toàn khi chiều dài dữ liệu lỗi hoặc chứa số không xác định (`NaN/Infinity`).
-- **`nms_filter_test.dart`**: Kiểm thử bộ lọc trùng lắp Non-Maximum Suppression (NMS). Xác nhận việc lọc bỏ các hộp đè chéo nhau trên cùng một lớp đối tượng, đồng thời đảm bảo không triệt tiêu các hộp đè chéo nhau thuộc hai nhãn lớp khác biệt.
-- **`widget_test.dart`**: Kiểm thử tải và dựng giao diện khởi đầu của ứng dụng (`HomeScreen`).
-
-### Chạy kiểm thử tự động:
+Install dependencies:
 
 ```bash
-# Chạy phân tích cú pháp tĩnh
+flutter pub get
+```
+
+Run static analysis:
+
+```bash
 flutter analyze
-
-# Chạy toàn bộ test suite
-flutter test
 ```
 
----
+Run tests:
 
-## 6. Benchmarking & Profiling Specification
+```bash
+flutter test --reporter compact
+```
 
-Trước khi đưa ứng dụng lên hệ thống Production, nhà phát triển cần thực hiện đo đạc hiệu năng trực tiếp trên thiết bị vật lý thông qua công cụ DevTools của Flutter.
+Sync CodeGraph after code changes:
 
-### Các thông số cần đo lường (Metrics)
+```bash
+codegraph.cmd sync .
+```
 
-1. **Inference Latency (Độ trễ suy luận)**: Thời gian chạy lệnh `interpreter.run(...)` trong Isolate nền (mục tiêu: `< 150ms` trên chip di động tầm trung).
-2. **Post-processing Latency**: Thời gian chạy giải mã tọa độ và thuật toán NMS (mục tiêu: `< 10ms`).
-3. **RAM Usage (Bộ nhớ RAM tiêu thụ)**: Dung lượng bộ nhớ được cấp phát khi nạp Interpreter và chạy luồng suy luận liên tục (mục tiêu: tăng thêm không quá `80 MB`).
-4. **CPU Core Overhead**: Mức tải của các nhân CPU nền khi isolate hoạt động (mục tiêu: threads = 4 để tối ưu hóa đa nhân).
-5. **Frame Rate (FPS)**: Tần suất làm tươi màn hình chính của UI Thread (mục tiêu: khóa cứng ổn định ở mức `60 FPS`).
+Run on a connected device:
 
----
+```bash
+flutter run
+```
 
-## 7. How to Run
+Run release mode:
 
-### Yêu cầu cấu hình
+```bash
+flutter run --release
+```
 
-- Flutter SDK `>= 3.19.0`
-- Android: SDK 21 trở lên (Lollipop), yêu cầu camera vật lý và quyền truy cập.
-- iOS: iOS 12.0 trở lên, cấu hình khóa quyền camera trong tệp `Info.plist`.
+## Test Coverage
 
-### Các bước khởi chạy
+Current unit tests cover:
 
-1. **Tải các gói phụ thuộc (Dependencies)**:
-   ```bash
-   flutter pub get
-   ```
-2. **Chuẩn bị mô hình**: Đảm bảo mô hình `yolov8n_float32.tflite` (hoặc tệp custom) đã được đặt tại đường dẫn `assets/models/yolov8n_float32.tflite` và cấu hình khai báo tài nguyên đầy đủ trong `pubspec.yaml`.
-3. **Chạy ứng dụng**:
+- YOLO detection decoding, including normalized and pixel-space boxes.
+- Non-Maximum Suppression.
+- Image YUV to RGB channel conversion helpers.
+- TFLite service isolate recovery.
+- IoU tracker matching, low-IoU center-distance fallback, and lost-track cleanup.
+- Line-cross counting, duplicate-count prevention, and direction filtering.
+- Initial app widget load.
 
-   ```bash
-   # Chạy debug trên thiết bị đang kết nối
-   flutter run
+## Production Checklist
 
-   # Build ứng dụng ở chế độ tối ưu hóa hiệu năng cao (Release)
-   flutter run --release
-   ```
+- Verify camera orientation and mirror behavior on physical Android and iOS devices.
+- Profile inference latency, preprocessing latency, memory, and thermal behavior.
+- Confirm the active model output coordinate format before release.
+- Tune live inference throttle for the target device class.
+- Calibrate counting-line direction for each real installation.
+- Add share/open-file UX for exported CSV/JSON reports if operators need direct handoff.

@@ -42,10 +42,12 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
 - **Inclusive Threshold Constraint**: Changed the overlap check condition to use the standard inclusive threshold comparison (`iou >= iouThreshold`), matching typical NMS definitions.
 
 ### 7. Refactored and Optimized Inference Isolate (InferenceIsolate)
+- **Explicit Type Imports**: Added explicit imports of `dart:typed_data` and `dart:ui` with linter override flags to satisfy distinct platform compile dependencies while remaining warnings-clean under strict analyze environments.
+- **Isolate Lifecycle Null-Guards**: Changed `_isolate` and `_sendPort` to be nullable, replacing direct invocations with `_isolate?.kill(...)` inside `dispose()`. This safely prevents `LateInitializationError` crashes if the service is disposed prior to initialization completing.
 - **Leak-Proof Port Handling**: Wrapped isolate invocation inside `runInference()` in a `try`/`finally` block that explicitly invokes `responsePort.close()`, resolving memory leakage of the temporary ports.
 - **Cached Output Dimensions**: Cached `numClasses` and `numBoxes` calculated values from the interpreter's output shape at Isolate startup time. This avoids looking up interpreter tensor properties on every request thread frame.
 - **Disposal State Clean**: Updated `dispose()` to set `_isReady = false` explicitly.
-- **Exception Debug Prints**: Enabled debug logging via `print` inside isolate catch blocks when `kDebugMode` is active to assist with developer model integration diagnostics.
+- **Exception debugPrint logging**: Replaced raw `print()` with standard `debugPrint()` inside isolate catch blocks when `kDebugMode` is active to assist with developer model integration diagnostics without cluttering production console feeds.
 
 ### 8. Optimized Bounding Box Painter (DetectorPainter) & Value Equality
 - **Built-in Contain Mapping**: Replaced manual contain-fit calculation in [detector_painter.dart](file:///d:/diemsoluong/lib/presentation/widgets/detector_painter.dart) with Flutter's standard `applyBoxFit` API (`BoxFit.contain`), guaranteeing correct scaling alignment.

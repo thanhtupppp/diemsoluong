@@ -1,17 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../data/models/detection.dart';
+import '../../../counting/domain/entities/counting_line.dart';
+import '../../../tracking/domain/entities/track.dart';
 
 class OverlayPainter extends CustomPainter {
-  final List<Detection> detections;
+  final List<Track> tracks;
   final Size originalImageSize;
   final List<String> labels;
+  final CountingLine? countingLine;
+  final Map<int, int> classCounts;
 
   OverlayPainter({
-    required this.detections,
+    required this.tracks,
     required this.originalImageSize,
     required this.labels,
+    this.countingLine,
+    this.classCounts = const {},
   });
 
   @override
@@ -43,7 +48,7 @@ class OverlayPainter extends CustomPainter {
     canvas.restore();
   }
 
-  /// Vẽ danh sách hộp giới hạn (Bounding Boxes) và điểm tin cậy
+  /// Vẽ danh sách hộp giới hạn (Bounding Boxes) và điểm tin cậy kèm Track ID
   void _drawDetections(
     Canvas canvas,
     Size size,
@@ -57,16 +62,15 @@ class OverlayPainter extends CustomPainter {
       ..strokeWidth = 3.0;
 
     final bgPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = Colors.black.withValues(alpha: 0.65);
+      ..style = PaintingStyle.fill;
 
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
       maxLines: 1,
     );
 
-    for (final detection in detections) {
-      final rect = detection.rect;
+    for (final track in tracks) {
+      final rect = track.rect;
 
       final left = rect.left * scaleX + dx;
       final top = rect.top * scaleY + dy;
@@ -75,17 +79,16 @@ class OverlayPainter extends CustomPainter {
 
       final mappedRect = Rect.fromLTWH(left, top, width, height);
 
-      final color =
-          Colors.primaries[detection.classId % Colors.primaries.length];
+      final color = Colors.primaries[track.classId % Colors.primaries.length];
       boxPaint.color = color;
 
       canvas.drawRect(mappedRect, boxPaint);
 
-      final labelName = detection.classId < labels.length
-          ? labels[detection.classId]
-          : 'Class ${detection.classId}';
+      final labelName = track.classId < labels.length
+          ? labels[track.classId]
+          : 'Class ${track.classId}';
       final labelText =
-          '$labelName ${(detection.score * 100).toStringAsFixed(0)}%';
+          '[ID: ${track.id}] $labelName ${(track.score * 100).toStringAsFixed(0)}%';
 
       textPainter.text = TextSpan(
         text: labelText,
@@ -130,7 +133,7 @@ class OverlayPainter extends CustomPainter {
     }
   }
 
-  /// Placeholder vẽ các đường tracking bám vết đối tượng vật lý (Phát triển sau ở Giai đoạn 4)
+  /// Vẽ đường lịch sử di chuyển tâm của các đối tượng bám vết
   void _drawTracks(
     Canvas canvas,
     Size size,
@@ -139,10 +142,44 @@ class OverlayPainter extends CustomPainter {
     double scaleX,
     double scaleY,
   ) {
-    // Sẽ vẽ đường theo vết chuyển động của từng đối tượng bám đuôi
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    for (final track in tracks) {
+      if (track.path.length < 2) continue;
+
+      final color = Colors.primaries[track.classId % Colors.primaries.length];
+      paint.color = color.withValues(alpha: 0.50);
+
+      final path = Path();
+      final firstPoint = track.path.first;
+      path.moveTo(
+        firstPoint.dx * scaleX + dx,
+        firstPoint.dy * scaleY + dy,
+      );
+
+      for (int i = 1; i < track.path.length; i++) {
+        final point = track.path[i];
+        path.lineTo(
+          point.dx * scaleX + dx,
+          point.dy * scaleY + dy,
+        );
+      }
+
+      canvas.drawPath(path, paint);
+
+      // Vẽ vòng tròn nhỏ màu sắc tại tâm hiện tại
+      final lastPoint = track.path.last;
+      canvas.drawCircle(
+        Offset(lastPoint.dx * scaleX + dx, lastPoint.dy * scaleY + dy),
+        4.0,
+        Paint()..color = color,
+      );
+    }
   }
 
-  /// Placeholder vẽ vạch giới hạn đếm hoặc vùng đếm đối tượng (Phát triển sau ở Giai đoạn 4)
+  /// Vẽ vạch đếm hoặc vùng đếm đối tượng cắt ngang
   void _drawCountingLines(
     Canvas canvas,
     Size size,
@@ -151,13 +188,42 @@ class OverlayPainter extends CustomPainter {
     double scaleX,
     double scaleY,
   ) {
-    // Sẽ vẽ vạch cắt ngang màn hình hoặc khu vực kích hoạt đếm
+    final line = countingLine;
+    if (line == null) return;
+
+    final paint = Paint()
+      ..color = Colors.tealAccent
+      ..strokeWidth = 4.0;
+
+    final startX = line.pointA.dx * scaleX + dx;
+    final startY = line.pointA.dy * scaleY + dy;
+    final endX = line.pointB.dx * scaleX + dx;
+    final endY = line.pointB.dy * scaleY + dy;
+
+    canvas.drawLine(Offset(startX, startY), Offset(endX, endY), paint);
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: ' ${line.name} ',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          backgroundColor: Colors.teal,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    textPainter.paint(canvas, Offset(startX + 10, startY - 18));
   }
 
   @override
   bool shouldRepaint(covariant OverlayPainter oldDelegate) {
-    return !listEquals(oldDelegate.detections, detections) ||
+    return !listEquals(oldDelegate.tracks, tracks) ||
         oldDelegate.originalImageSize != originalImageSize ||
-        !listEquals(oldDelegate.labels, labels);
+        !listEquals(oldDelegate.labels, labels) ||
+        oldDelegate.countingLine != countingLine ||
+        !mapEquals(oldDelegate.classCounts, classCounts);
   }
 }

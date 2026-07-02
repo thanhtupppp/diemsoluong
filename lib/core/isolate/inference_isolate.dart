@@ -74,13 +74,13 @@ class InferenceIsolate {
       final replyPort = message[1] as SendPort;
 
       try {
-        // 1. Tiền xử lý ảnh sang Float32List [1, 640, 640, 3]
-        final inputBuffer = ImageService.preprocessImage(
+        // 1. Tiền xử lý ảnh sang PreprocessResult
+        final preprocessResult = ImageService.preprocessImage(
           request.imageBytes,
           ModelConfig.inputSize,
         );
 
-        if (inputBuffer.isEmpty) {
+        if (preprocessResult == null) {
           replyPort.send(<Detection>[]);
           return;
         }
@@ -92,18 +92,45 @@ class InferenceIsolate {
 
         // 2. Chạy mô hình
         interpreter.run(
-          inputBuffer.reshape([1, ModelConfig.inputSize, ModelConfig.inputSize, 3]),
+          preprocessResult.input.reshape([1, ModelConfig.inputSize, ModelConfig.inputSize, 3]),
           outputBuffer.reshape([1, 4 + numClasses, numBoxes]),
         );
 
-        // 3. Giải mã và NMS
+        // 3. Giải mã
         final decoded = decodeDetections(
           outputBuffer,
           numBoxes,
           numClasses,
           request.confidenceThreshold,
         );
-        final filtered = applyNMS(decoded, request.iouThreshold);
+
+        // Ánh xạ ngược tọa độ từ model space về original image space (unletterbox)
+        final scale = preprocessResult.scale;
+        final padX = preprocessResult.padX;
+        final padY = preprocessResult.padY;
+        final origW = preprocessResult.originalWidth.toDouble();
+        final origH = preprocessResult.originalHeight.toDouble();
+
+        final unletterboxed = decoded.map((det) {
+          final rect = det.rect;
+          double left = (rect.left - padX) / scale;
+          double top = (rect.top - padY) / scale;
+          double right = (rect.right - padX) / scale;
+          double bottom = (rect.bottom - padY) / scale;
+
+          left = left.clamp(0.0, origW).toDouble();
+          top = top.clamp(0.0, origH).toDouble();
+          right = right.clamp(0.0, origW).toDouble();
+          bottom = bottom.clamp(0.0, origH).toDouble();
+
+          return Detection(
+            rect: Rect.fromLTRB(left, top, right, bottom),
+            classId: det.classId,
+            score: det.score,
+          );
+        }).toList();
+
+        final filtered = applyNMS(unletterboxed, request.iouThreshold);
 
         replyPort.send(filtered);
       } catch (e) {

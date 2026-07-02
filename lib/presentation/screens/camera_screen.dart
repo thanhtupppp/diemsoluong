@@ -192,7 +192,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.7),
+                // ignore: deprecated_member_use
+                color: Colors.black.withOpacity(0.7),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
@@ -215,8 +216,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   void dispose() {
     _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
-    _captureTimer?.cancel();
-    _controller?.dispose();
+    unawaited(_disposeCamera());
     super.dispose();
   }
 }

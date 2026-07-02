@@ -44,6 +44,8 @@ This walkthrough documents all completed tasks to resolve camera runtime issues,
 ### 7. Refactored and Optimized Inference Isolate (InferenceIsolate)
 - **Explicit Type Imports**: Added explicit imports of `dart:typed_data` and `dart:ui` with linter override flags to satisfy distinct platform compile dependencies while remaining warnings-clean under strict analyze environments.
 - **Isolate Lifecycle Null-Guards**: Changed `_isolate` and `_sendPort` to be nullable, replacing direct invocations with `_isolate?.kill(...)` inside `dispose()`. This safely prevents `LateInitializationError` crashes if the service is disposed prior to initialization completing.
+- **Isolate Clean State Nullification**: Cleaned up the nullable fields `_isolate = null` and `_sendPort = null` explicitly inside `dispose()`.
+- **Obfuscation Safety**: Added the `@pragma('vm:entry-point')` annotation above `_isolateEntryPoint` to ensure compiler tree-shaking and obfuscation do not delete the isolate entry method in release builds.
 - **Leak-Proof Port Handling**: Wrapped isolate invocation inside `runInference()` in a `try`/`finally` block that explicitly invokes `responsePort.close()`, resolving memory leakage of the temporary ports.
 - **Cached Output Dimensions**: Cached `numClasses` and `numBoxes` calculated values from the interpreter's output shape at Isolate startup time. This avoids looking up interpreter tensor properties on every request thread frame.
 - **Disposal State Clean**: Updated `dispose()` to set `_isReady = false` explicitly.

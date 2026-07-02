@@ -51,10 +51,13 @@ class ImageService {
     );
     img.fill(canvas, color: img.ColorRgb8(114, 114, 114));
 
-    final padX = ((targetSize - resizedWidth) / 2).floor();
-    final padY = ((targetSize - resizedHeight) / 2).floor();
+    final dw = targetSize - resizedWidth;
+    final dh = targetSize - resizedHeight;
 
-    img.compositeImage(canvas, resized, dstX: padX, dstY: padY);
+    final padLeft = dw / 2.0;
+    final padTop = dh / 2.0;
+
+    img.compositeImage(canvas, resized, dstX: padLeft.floor(), dstY: padTop.floor());
 
     final floatBuffer = Float32List(targetSize * targetSize * 3);
     int index = 0;
@@ -73,8 +76,8 @@ class ImageService {
       originalWidth: originalWidth,
       originalHeight: originalHeight,
       scale: scale,
-      padX: padX.toDouble(),
-      padY: padY.toDouble(),
+      padX: padLeft,
+      padY: padTop,
     );
   }
 

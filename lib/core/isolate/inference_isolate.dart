@@ -1,4 +1,8 @@
 import 'dart:isolate';
+// ignore: unnecessary_import
+import 'dart:typed_data';
+// ignore: unnecessary_import
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -23,8 +27,8 @@ class InferenceRequest {
 }
 
 class InferenceIsolate {
-  late Isolate _isolate;
-  late SendPort _sendPort;
+  Isolate? _isolate;
+  SendPort? _sendPort;
   final ReceivePort _receivePort = ReceivePort();
   bool _isReady = false;
 
@@ -32,19 +36,23 @@ class InferenceIsolate {
 
   Future<void> init() async {
     final token = RootIsolateToken.instance!;
-    _isolate = await Isolate.spawn(
+    final isolate = await Isolate.spawn(
       _isolateEntryPoint,
       [_receivePort.sendPort, token],
     );
+    _isolate = isolate;
 
     _sendPort = await _receivePort.first as SendPort;
     _isReady = true;
   }
 
   Future<List<Detection>> runInference(InferenceRequest request) async {
+    if (!_isReady || _sendPort == null) {
+      throw StateError('InferenceIsolate is not ready.');
+    }
     final responsePort = ReceivePort();
     try {
-      _sendPort.send([request, responsePort.sendPort]);
+      _sendPort!.send([request, responsePort.sendPort]);
       final result = await responsePort.first as List<Detection>;
       return result;
     } finally {
@@ -54,7 +62,7 @@ class InferenceIsolate {
 
   void dispose() {
     _isReady = false;
-    _isolate.kill(priority: Isolate.beforeNextEvent);
+    _isolate?.kill(priority: Isolate.beforeNextEvent);
     _receivePort.close();
   }
 
@@ -144,7 +152,7 @@ class InferenceIsolate {
         replyPort.send(filtered);
       } catch (e, stackTrace) {
         if (kDebugMode) {
-          print('Error in InferenceIsolate: $e\n$stackTrace');
+          debugPrint('Error in InferenceIsolate: $e\n$stackTrace');
         }
         replyPort.send(<Detection>[]);
       }

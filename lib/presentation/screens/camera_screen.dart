@@ -164,27 +164,37 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       );
     }
 
+    final screenSize = MediaQuery.sizeOf(context);
+    final deviceRatio = screenSize.width / screenSize.height;
+    final previewRatio = 1 / _controller!.value.aspectRatio;
+    double scale = previewRatio / deviceRatio;
+    if (scale < 1) scale = 1 / scale;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Quét Real-time')),
       body: Stack(
         children: [
           Center(
-            child: AspectRatio(
-              aspectRatio: 1 / _controller!.value.aspectRatio,
-              child: Stack(
-                children: [
-                  Positioned.fill(child: CameraPreview(_controller!)),
-                  if (state.detections.isNotEmpty && _previewSize != null)
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: DetectorPainter(
-                          detections: state.detections,
-                          originalImageSize: _previewSize!,
-                          labels: ModelConfig.cocoLabels,
+            child: ClipRect(
+              child: Transform.scale(
+                scale: scale,
+                child: AspectRatio(
+                  aspectRatio: previewRatio,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CameraPreview(_controller!),
+                      if (state.detections.isNotEmpty && _previewSize != null)
+                        CustomPaint(
+                          painter: DetectorPainter(
+                            detections: state.detections,
+                            originalImageSize: _previewSize!,
+                            labels: ModelConfig.cocoLabels,
+                          ),
                         ),
-                      ),
-                    ),
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -201,8 +211,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                // ignore: deprecated_member_use
-                color: Colors.black.withOpacity(0.7),
+                color: Colors.black.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(

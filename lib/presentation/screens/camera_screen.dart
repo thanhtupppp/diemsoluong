@@ -22,6 +22,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   Timer? _captureTimer;
   bool _isProcessing = false;
   bool _isDisposed = false;
+  bool _isInitializingCamera = false;
   Size? _previewSize;
   String? _cameraError;
 
@@ -33,6 +34,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 
   Future<void> _initializeCamera() async {
+    if (_isInitializingCamera || _isDisposed) return;
+    _isInitializingCamera = true;
+
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
@@ -42,6 +46,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         });
         return;
       }
+
+      await _disposeCamera();
 
       final controller = CameraController(
         cameras.first,
@@ -56,17 +62,21 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         return;
       }
 
-      _previewSize = controller.value.previewSize != null
-          ? Size(
-              controller.value.previewSize!.height,
-              controller.value.previewSize!.width,
-            )
-          : null;
+      // Xử lý previewSize cho giao diện Portrait (xoay 90 độ)
+      final previewSize = controller.value.previewSize;
+      if (previewSize != null) {
+        _previewSize = Size(previewSize.height, previewSize.width);
+      } else {
+        _previewSize = null;
+      }
 
-      setState(() {
-        _controller = controller;
-        _cameraError = null;
-      });
+      _controller = controller;
+
+      if (mounted) {
+        setState(() {
+          _cameraError = null;
+        });
+      }
 
       _startPeriodicCapture();
     } catch (e) {
@@ -74,6 +84,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       setState(() {
         _cameraError = 'Không thể khởi tạo camera: $e';
       });
+    } finally {
+      _isInitializingCamera = false;
     }
   }
 
@@ -91,13 +103,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (controller.value.isTakingPicture) return;
 
     _isProcessing = true;
+    if (mounted) setState(() {});
 
     try {
-      final XFile file = await controller.takePicture();
+      final file = await controller.takePicture();
       final bytes = await file.readAsBytes();
 
       if (_isDisposed || !mounted) return;
-
       await ref.read(detectorNotifierProvider.notifier).detectImage(bytes);
     } catch (e) {
       if (kDebugMode) {
@@ -105,19 +117,31 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       }
     } finally {
       _isProcessing = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _disposeCamera() async {
+    _captureTimer?.cancel();
+    _captureTimer = null;
+
+    final controller = _controller;
+    _controller = null;
+
+    if (controller != null) {
+      await controller.dispose();
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) return;
+    if (_isDisposed) return;
 
     if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
-      _captureTimer?.cancel();
-      controller.dispose();
-      _controller = null;
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      unawaited(_disposeCamera());
     } else if (state == AppLifecycleState.resumed) {
       _initializeCamera();
     }
@@ -154,6 +178,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   labels: ModelConfig.cocoLabels,
                 ),
               ),
+            ),
+          if (_isProcessing)
+            const Positioned(
+              top: 16,
+              right: 16,
+              child: Chip(label: Text('Đang quét...')),
             ),
           Positioned(
             bottom: 30,

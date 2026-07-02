@@ -63,9 +63,12 @@ class InferenceIsolate {
   void dispose() {
     _isReady = false;
     _isolate?.kill(priority: Isolate.beforeNextEvent);
+    _isolate = null;
+    _sendPort = null;
     _receivePort.close();
   }
 
+  @pragma('vm:entry-point')
   static void _isolateEntryPoint(List<dynamic> args) async {
     final mainSendPort = args[0] as SendPort;
     final token = args[1] as RootIsolateToken;

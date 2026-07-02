@@ -39,15 +39,19 @@ List<Detection> decodeDetections(
     final w = output[2 * numBoxes + i] * inputSize;
     final h = output[3 * numBoxes + i] * inputSize;
 
+    if (!xCenter.isFinite || !yCenter.isFinite || !w.isFinite || !h.isFinite) {
+      continue;
+    }
+
     double left = xCenter - w / 2;
     double top = yCenter - h / 2;
     double right = xCenter + w / 2;
     double bottom = yCenter + h / 2;
 
-    left = left.clamp(0.0, inputSize);
-    top = top.clamp(0.0, inputSize);
-    right = right.clamp(0.0, inputSize);
-    bottom = bottom.clamp(0.0, inputSize);
+    left = left.clamp(0.0, inputSize).toDouble();
+    top = top.clamp(0.0, inputSize).toDouble();
+    right = right.clamp(0.0, inputSize).toDouble();
+    bottom = bottom.clamp(0.0, inputSize).toDouble();
 
     final clampedWidth = right - left;
     final clampedHeight = bottom - top;

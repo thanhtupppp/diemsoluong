@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import '../../core/isolate/inference_isolate.dart';
 import '../../data/models/detection.dart';
 import '../../data/models/model_config.dart';
@@ -6,10 +7,19 @@ import '../../data/models/model_config.dart';
 class TfliteService {
   final InferenceIsolate _isolate = InferenceIsolate();
 
+  Future<void>? _initializing;
+  bool _disposed = false;
+
   Future<void> initialize() async {
-    if (!_isolate.isReady) {
-      await _isolate.init();
+    if (_disposed) {
+      throw StateError('TfliteService has been disposed.');
     }
+
+    if (_isolate.isReady) return;
+
+    _initializing ??= _isolate.init();
+    await _initializing;
+    _initializing = null;
   }
 
   Future<List<Detection>> detectObjects(
@@ -17,7 +27,12 @@ class TfliteService {
     double confidenceThreshold = ModelConfig.defaultConfidenceThreshold,
     double iouThreshold = ModelConfig.defaultIouThreshold,
   }) async {
+    if (_disposed) {
+      throw StateError('TfliteService has been disposed.');
+    }
+
     await initialize();
+
     return _isolate.runInference(
       InferenceRequest(
         imageBytes: imageBytes,
@@ -28,6 +43,8 @@ class TfliteService {
   }
 
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     _isolate.dispose();
   }
 }

@@ -18,5 +18,18 @@ void main() {
       expect(filtered[0].score, 0.9);
       expect(filtered[1].score, 0.85);
     });
+
+    test('applyNMS does not filter overlapping boxes of different classes', () {
+      final detections = [
+        const Detection(rect: Rect.fromLTWH(100, 100, 50, 50), classId: 0, score: 0.9),
+        const Detection(rect: Rect.fromLTWH(105, 105, 50, 50), classId: 1, score: 0.8), // Overlapping but different class
+      ];
+
+      final filtered = applyNMS(detections, 0.45);
+      
+      expect(filtered.length, 2);
+      expect(filtered[0].classId, 0);
+      expect(filtered[1].classId, 1);
+    });
   });
 }

@@ -9,15 +9,23 @@ class TfliteService {
 
   Future<void>? _initializing;
   bool _disposed = false;
+  String _modelPath = ModelConfig.modelAssetPath;
 
-  Future<void> initialize() async {
+  Future<void> initialize({String? modelPath}) async {
     if (_disposed) {
       throw StateError('TfliteService has been disposed.');
     }
 
-    if (_isolate.isReady) return;
+    final targetPath = modelPath ?? _modelPath;
 
-    _initializing ??= _isolate.init();
+    if (_isolate.isReady && _modelPath == targetPath) return;
+
+    if (_isolate.isReady) {
+      _isolate.dispose();
+    }
+
+    _modelPath = targetPath;
+    _initializing = _isolate.init(_modelPath);
     try {
       await _initializing;
     } finally {
@@ -29,12 +37,13 @@ class TfliteService {
     Uint8List imageBytes, {
     double confidenceThreshold = ModelConfig.defaultConfidenceThreshold,
     double iouThreshold = ModelConfig.defaultIouThreshold,
+    String? modelPath,
   }) async {
     if (_disposed) {
       throw StateError('TfliteService has been disposed.');
     }
 
-    await initialize();
+    await initialize(modelPath: modelPath);
 
     return _isolate.runInference(
       InferenceRequest(

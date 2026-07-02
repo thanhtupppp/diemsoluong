@@ -61,6 +61,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: const Text('AI Đếm Số Lượng Vật Thể'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
+        actions: [
+          if (state.availableModels.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: DropdownButton<String>(
+                value: state.selectedModel?.id,
+                dropdownColor: Colors.teal.shade700,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                underline: const SizedBox(),
+                icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                items: state.availableModels.map((model) {
+                  return DropdownMenuItem<String>(
+                    value: model.id,
+                    child: Text(model.name),
+                  );
+                }).toList(),
+                onChanged: (modelId) {
+                  if (modelId != null) {
+                    final selected = state.availableModels.firstWhere((m) => m.id == modelId);
+                    ref.read(detectorNotifierProvider.notifier).selectModel(selected);
+                  }
+                },
+              ),
+            ),
+        ],
       ),
       body: Center(
         child: Column(

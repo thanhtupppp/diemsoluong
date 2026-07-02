@@ -11,6 +11,9 @@ import '../../features/export/data/exporters/csv_exporter.dart';
 import '../../features/export/data/exporters/json_exporter.dart';
 import '../../features/export/domain/entities/export_job.dart';
 import '../../features/export/domain/services/exporter.dart';
+import '../../features/model_management/data/repositories/model_repository_impl.dart';
+import '../../features/model_management/domain/entities/model_info.dart';
+import '../../features/model_management/domain/repositories/model_repository.dart';
 import '../../features/tracking/data/trackers/iou_tracker.dart';
 import '../../features/tracking/domain/entities/track.dart';
 import '../../features/tracking/domain/services/tracker.dart';
@@ -21,6 +24,8 @@ class DetectorState {
   final List<Detection> detections;
   final List<Track> tracks;
   final Map<int, int> classCounts;
+  final List<ModelInfo> availableModels;
+  final ModelInfo? selectedModel;
   final String? errorMessage;
 
   const DetectorState({
@@ -29,6 +34,8 @@ class DetectorState {
     this.detections = const [],
     this.tracks = const [],
     this.classCounts = const {},
+    this.availableModels = const [],
+    this.selectedModel,
     this.errorMessage,
   });
 
@@ -38,6 +45,8 @@ class DetectorState {
     List<Detection>? detections,
     List<Track>? tracks,
     Map<int, int>? classCounts,
+    List<ModelInfo>? availableModels,
+    ModelInfo? selectedModel,
     String? errorMessage,
   }) {
     return DetectorState(
@@ -46,6 +55,8 @@ class DetectorState {
       detections: detections ?? this.detections,
       tracks: tracks ?? this.tracks,
       classCounts: classCounts ?? this.classCounts,
+      availableModels: availableModels ?? this.availableModels,
+      selectedModel: selectedModel ?? this.selectedModel,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -60,10 +71,12 @@ final tfliteServiceProvider = Provider<TfliteService>((ref) {
 
 final csvExporterProvider = Provider<Exporter>((ref) => CsvExporter());
 final jsonExporterProvider = Provider<Exporter>((ref) => JsonExporter());
+final modelRepositoryProvider = Provider<ModelRepository>((ref) => ModelRepositoryImpl());
 
 class DetectorNotifier extends Notifier<DetectorState> {
   final Tracker _tracker = IouTracker();
   late final Counter _counter;
+  late final ModelRepository _modelRepository;
 
   final CountingLine countingLine = const CountingLine(
     id: 'central_line',
@@ -75,7 +88,25 @@ class DetectorNotifier extends Notifier<DetectorState> {
   @override
   DetectorState build() {
     _counter = LineCrossCounter(line: countingLine);
+    _modelRepository = ref.read(modelRepositoryProvider);
+    _initModels();
     return const DetectorState();
+  }
+
+  Future<void> _initModels() async {
+    final models = await _modelRepository.getAvailableModels();
+    if (models.isNotEmpty) {
+      state = state.copyWith(
+        availableModels: models,
+        selectedModel: models.first,
+      );
+    }
+  }
+
+  Future<void> selectModel(ModelInfo model) async {
+    state = state.copyWith(selectedModel: model);
+    final tfliteService = ref.read(tfliteServiceProvider);
+    await tfliteService.initialize(modelPath: model.path);
   }
 
   Future<void> detectImage(Uint8List bytes) async {
@@ -83,7 +114,10 @@ class DetectorNotifier extends Notifier<DetectorState> {
     
     try {
       final tfliteService = ref.read(tfliteServiceProvider);
-      final detections = await tfliteService.detectObjects(bytes);
+      final detections = await tfliteService.detectObjects(
+        bytes,
+        modelPath: state.selectedModel?.path,
+      );
       
       final tracks = _tracker.update(detections);
       final countResult = _counter.process(tracks);
@@ -110,6 +144,7 @@ class DetectorNotifier extends Notifier<DetectorState> {
 
     final exportDataMap = <String, dynamic>{
       'timestamp': DateTime.now().toIso8601String(),
+      'selected_model': state.selectedModel?.name ?? 'unknown',
       'total_tracks': state.tracks.length,
       'counted_tracks_total': state.classCounts.values.fold(0, (sum, val) => sum + val),
     };
@@ -126,7 +161,13 @@ class DetectorNotifier extends Notifier<DetectorState> {
   void clear() {
     _tracker.reset();
     _counter.reset();
-    state = const DetectorState();
+    state = state.copyWith(
+      imageBytes: null,
+      detections: const [],
+      tracks: const [],
+      classCounts: const {},
+      errorMessage: null,
+    );
   }
 }
 

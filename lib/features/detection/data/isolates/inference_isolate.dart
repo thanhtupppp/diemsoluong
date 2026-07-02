@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:isolate';
 // ignore: unnecessary_import
 import 'dart:typed_data';
@@ -9,7 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 import '../../../../data/models/detection.dart';
-import '../../../../data/models/model_config.dart';
 import '../../domain/usecases/decode_detections.dart';
 import '../../domain/usecases/apply_nms.dart';
 import '../services/image_service.dart';
@@ -34,11 +34,11 @@ class InferenceIsolate {
 
   bool get isReady => _isReady;
 
-  Future<void> init() async {
+  Future<void> init(String modelPath) async {
     final token = RootIsolateToken.instance!;
     final isolate = await Isolate.spawn(
       _isolateEntryPoint,
-      [_receivePort.sendPort, token],
+      [_receivePort.sendPort, token, modelPath],
     );
     _isolate = isolate;
 
@@ -72,6 +72,7 @@ class InferenceIsolate {
   static void _isolateEntryPoint(List<dynamic> args) async {
     final mainSendPort = args[0] as SendPort;
     final token = args[1] as RootIsolateToken;
+    final modelPath = args[2] as String;
 
     BackgroundIsolateBinaryMessenger.ensureInitialized(token);
 
@@ -79,15 +80,26 @@ class InferenceIsolate {
     final options = InterpreterOptions()..threads = 4;
     options.useNnApiForAndroid = true;
 
-    final interpreter = await Interpreter.fromAsset(
-      ModelConfig.modelAssetPath,
-      options: options,
-    );
+    final Interpreter interpreter;
+    if (modelPath.startsWith('assets/')) {
+      interpreter = await Interpreter.fromAsset(
+        modelPath,
+        options: options,
+      );
+    } else {
+      interpreter = Interpreter.fromFile(
+        File(modelPath),
+        options: options,
+      );
+    }
 
     // Cache kích thước output tensor
     final outputShape = interpreter.getOutputTensors().first.shape;
     final numClasses = outputShape[1] - 4;
     final numBoxes = outputShape[2];
+
+    final inputShape = interpreter.getInputTensors().first.shape;
+    final inputSize = inputShape[1]; // e.g. 640
 
     final commandPort = ReceivePort();
     mainSendPort.send(commandPort.sendPort);
@@ -100,7 +112,7 @@ class InferenceIsolate {
         // 1. Tiền xử lý ảnh sang PreprocessResult
         final preprocessResult = ImageService.preprocessImage(
           request.imageBytes,
-          ModelConfig.inputSize,
+          inputSize,
         );
 
         if (preprocessResult == null) {
@@ -112,7 +124,7 @@ class InferenceIsolate {
 
         // 2. Chạy mô hình
         interpreter.run(
-          preprocessResult.input.reshape([1, ModelConfig.inputSize, ModelConfig.inputSize, 3]),
+          preprocessResult.input.reshape([1, inputSize, inputSize, 3]),
           outputBuffer.reshape([1, 4 + numClasses, numBoxes]),
         );
 

@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
 
-import '../../data/models/detection.dart';
+import '../../../../data/models/detection.dart';
 
 List<Detection> applyNMS(List<Detection> detections, double iouThreshold) {
   if (detections.isEmpty) return [];

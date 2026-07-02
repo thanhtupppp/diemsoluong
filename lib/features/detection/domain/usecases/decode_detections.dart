@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 import 'dart:ui';
 
-import '../../data/models/detection.dart';
-import '../../data/models/model_config.dart';
+import '../../../../data/models/detection.dart';
+import '../../../../data/models/model_config.dart';
 
 List<Detection> decodeDetections(
   Float32List output,

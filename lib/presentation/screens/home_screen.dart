@@ -7,6 +7,7 @@ import '../../data/models/model_config.dart';
 import '../state/detector_notifier.dart';
 import '../../features/overlay/presentation/widgets/overlay_painter.dart';
 import '../../features/camera/presentation/screens/camera_screen.dart';
+import '../../features/overlay/presentation/widgets/interactive_line_overlay.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -101,21 +102,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             fit: BoxFit.contain,
                           ),
                         ),
-                        if (state.tracks.isNotEmpty && _imageSize != null)
+                        if (_imageSize != null)
                           Center(
                             child: AspectRatio(
                               aspectRatio: _imageSize!.width / _imageSize!.height,
                               child: LayoutBuilder(
                                 builder: (context, constraints) {
-                                  return CustomPaint(
-                                    size: Size(constraints.maxWidth, constraints.maxHeight),
-                                    painter: OverlayPainter(
-                                      tracks: state.tracks,
-                                      originalImageSize: _imageSize!,
-                                      labels: ModelConfig.cocoLabels,
-                                      countingLine: ref.read(detectorNotifierProvider.notifier).countingLine,
-                                      classCounts: state.classCounts,
-                                    ),
+                                  return Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      if (state.tracks.isNotEmpty)
+                                        CustomPaint(
+                                          size: Size(constraints.maxWidth, constraints.maxHeight),
+                                          painter: OverlayPainter(
+                                            tracks: state.tracks,
+                                            originalImageSize: _imageSize!,
+                                            labels: ModelConfig.cocoLabels,
+                                            countingLine: state.countingLine,
+                                            classCounts: state.classCounts,
+                                          ),
+                                        ),
+                                      InteractiveLineOverlay(
+                                        originalImageSize: _imageSize!,
+                                        countingLine: state.countingLine,
+                                        onLineChanged: (pointA, pointB) {
+                                          ref
+                                              .read(detectorNotifierProvider.notifier)
+                                              .updateCountingLine(pointA, pointB);
+                                        },
+                                      ),
+                                    ],
                                   );
                                 },
                               ),

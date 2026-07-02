@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../data/models/model_config.dart';
 import '../../../../presentation/state/detector_notifier.dart';
 import '../../../overlay/presentation/widgets/overlay_painter.dart';
+import '../../../overlay/presentation/widgets/interactive_line_overlay.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -190,9 +191,19 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                             tracks: state.tracks,
                             originalImageSize: _previewSize!,
                             labels: ModelConfig.cocoLabels,
-                            countingLine: ref.read(detectorNotifierProvider.notifier).countingLine,
+                            countingLine: state.countingLine,
                             classCounts: state.classCounts,
                           ),
+                        ),
+                      if (_previewSize != null)
+                        InteractiveLineOverlay(
+                          originalImageSize: _previewSize!,
+                          countingLine: state.countingLine,
+                          onLineChanged: (pointA, pointB) {
+                            ref
+                                .read(detectorNotifierProvider.notifier)
+                                .updateCountingLine(pointA, pointB);
+                          },
                         ),
                     ],
                   ),

@@ -26,6 +26,7 @@ class DetectorState {
   final Map<int, int> classCounts;
   final List<ModelInfo> availableModels;
   final ModelInfo? selectedModel;
+  final CountingLine countingLine;
   final String? errorMessage;
 
   const DetectorState({
@@ -36,6 +37,12 @@ class DetectorState {
     this.classCounts = const {},
     this.availableModels = const [],
     this.selectedModel,
+    this.countingLine = const CountingLine(
+      id: 'central_line',
+      name: 'Vạch Đếm Trung Tâm',
+      pointA: Offset(0, 320),
+      pointB: Offset(640, 320),
+    ),
     this.errorMessage,
   });
 
@@ -47,6 +54,7 @@ class DetectorState {
     Map<int, int>? classCounts,
     List<ModelInfo>? availableModels,
     ModelInfo? selectedModel,
+    CountingLine? countingLine,
     String? errorMessage,
   }) {
     return DetectorState(
@@ -57,6 +65,7 @@ class DetectorState {
       classCounts: classCounts ?? this.classCounts,
       availableModels: availableModels ?? this.availableModels,
       selectedModel: selectedModel ?? this.selectedModel,
+      countingLine: countingLine ?? this.countingLine,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
@@ -78,16 +87,15 @@ class DetectorNotifier extends Notifier<DetectorState> {
   late final Counter _counter;
   late final ModelRepository _modelRepository;
 
-  final CountingLine countingLine = const CountingLine(
-    id: 'central_line',
-    name: 'Vạch Đếm Trung Tâm',
-    pointA: Offset(0, 320),
-    pointB: Offset(640, 320),
-  );
-
   @override
   DetectorState build() {
-    _counter = LineCrossCounter(line: countingLine);
+    const defaultLine = CountingLine(
+      id: 'central_line',
+      name: 'Vạch Đếm Trung Tâm',
+      pointA: Offset(0, 320),
+      pointB: Offset(640, 320),
+    );
+    _counter = LineCrossCounter(line: defaultLine);
     _modelRepository = ref.read(modelRepositoryProvider);
     _initModels();
     return const DetectorState();
@@ -101,6 +109,17 @@ class DetectorNotifier extends Notifier<DetectorState> {
         selectedModel: models.first,
       );
     }
+  }
+
+  void updateCountingLine(Offset pointA, Offset pointB) {
+    final newLine = CountingLine(
+      id: state.countingLine.id,
+      name: state.countingLine.name,
+      pointA: pointA,
+      pointB: pointB,
+    );
+    _counter = LineCrossCounter(line: newLine);
+    state = state.copyWith(countingLine: newLine);
   }
 
   Future<void> selectModel(ModelInfo model) async {

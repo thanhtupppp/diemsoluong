@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/model_config.dart';
 import '../state/detector_notifier.dart';
-import '../widgets/detector_painter.dart';
+import '../../features/detection/presentation/widgets/detector_painter.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});

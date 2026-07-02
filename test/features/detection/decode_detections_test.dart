@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:diemsoluong/domain/usecases/decode_yolo_output.dart';
+import 'package:diemsoluong/features/detection/domain/usecases/decode_detections.dart';
 
 void main() {
   group('YOLOv8 Decode Tests', () {

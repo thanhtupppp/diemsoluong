@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/detection.dart';
-import '../../data/services/tflite_service.dart';
+import '../../features/detection/data/services/tflite_service.dart';
 
 class DetectorState {
   final bool isLoading;

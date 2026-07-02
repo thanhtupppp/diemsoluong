@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:diemsoluong/data/models/detection.dart';
-import 'package:diemsoluong/domain/usecases/nms_filter.dart';
+import 'package:diemsoluong/features/detection/domain/usecases/apply_nms.dart';
 
 void main() {
   group('NMS Filter Tests', () {

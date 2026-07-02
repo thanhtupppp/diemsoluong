@@ -76,7 +76,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             fit: BoxFit.contain,
                           ),
                         ),
-                        if (state.detections.isNotEmpty && _imageSize != null)
+                        if (state.tracks.isNotEmpty && _imageSize != null)
                           Center(
                             child: AspectRatio(
                               aspectRatio: _imageSize!.width / _imageSize!.height,
@@ -85,9 +85,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   return CustomPaint(
                                     size: Size(constraints.maxWidth, constraints.maxHeight),
                                     painter: OverlayPainter(
-                                      detections: state.detections,
+                                      tracks: state.tracks,
                                       originalImageSize: _imageSize!,
                                       labels: ModelConfig.cocoLabels,
+                                      countingLine: ref.read(detectorNotifierProvider.notifier).countingLine,
+                                      classCounts: state.classCounts,
                                     ),
                                   );
                                 },
@@ -101,7 +103,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
             ),
-            if (state.detections.isNotEmpty && !state.isLoading)
+            if (state.tracks.isNotEmpty && !state.isLoading)
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
                 color: Colors.teal.shade50,
@@ -109,7 +111,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Tổng vật thể đếm được: ${state.detections.length}',
+                      'Phát hiện: ${state.tracks.length} | Đã đếm qua vạch: ${state.classCounts.values.fold(0, (sum, val) => sum + val)}',
                       style: const TextStyle(
                         fontSize: 18.0,
                         fontWeight: FontWeight.bold,

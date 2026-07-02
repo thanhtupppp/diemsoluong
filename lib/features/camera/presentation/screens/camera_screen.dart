@@ -184,12 +184,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     fit: StackFit.expand,
                     children: [
                       CameraPreview(_controller!),
-                      if (state.detections.isNotEmpty && _previewSize != null)
+                      if (state.tracks.isNotEmpty && _previewSize != null)
                         CustomPaint(
                           painter: OverlayPainter(
-                            detections: state.detections,
+                            tracks: state.tracks,
                             originalImageSize: _previewSize!,
                             labels: ModelConfig.cocoLabels,
+                            countingLine: ref.read(detectorNotifierProvider.notifier).countingLine,
+                            classCounts: state.classCounts,
                           ),
                         ),
                     ],
@@ -215,7 +217,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                'Phát hiện: ${state.detections.length} vật thể',
+                'Phát hiện: ${state.tracks.length} | Đã đếm qua vạch: ${state.classCounts.values.fold(0, (sum, val) => sum + val)}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,

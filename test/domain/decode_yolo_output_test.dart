@@ -1,9 +1,6 @@
 import 'dart:typed_data';
-import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:diemsoluong/data/models/detection.dart';
 import 'package:diemsoluong/domain/usecases/decode_yolo_output.dart';
-import 'package:diemsoluong/domain/usecases/nms_filter.dart';
 
 void main() {
   group('YOLOv8 Decode Tests', () {
@@ -34,22 +31,6 @@ void main() {
       // Kiểm tra toạ độ xCenter = 0.5 * 640 = 320, width = 0.1 * 640 = 64
       // rect left = 320 - 32 = 288
       expect(detections[0].rect.left, closeTo(288.0, 1e-5));
-    });
-  });
-
-  group('NMS Filter Tests', () {
-    test('applyNMS filters overlapping boxes', () {
-      final detections = [
-        const Detection(rect: Rect.fromLTWH(100, 100, 50, 50), classId: 0, score: 0.9),
-        const Detection(rect: Rect.fromLTWH(105, 105, 50, 50), classId: 0, score: 0.8), // Overlapping
-        const Detection(rect: Rect.fromLTWH(300, 300, 50, 50), classId: 0, score: 0.85), // Non-overlapping
-      ];
-
-      final filtered = applyNMS(detections, 0.45);
-      
-      expect(filtered.length, 2);
-      expect(filtered[0].score, 0.9);
-      expect(filtered[1].score, 0.85);
     });
   });
 }

@@ -43,15 +43,21 @@ class TfliteService {
       throw StateError('TfliteService has been disposed.');
     }
 
-    await initialize(modelPath: modelPath);
-
-    return _isolate.runInference(
-      InferenceRequest(
-        imageBytes: imageBytes,
-        confidenceThreshold: confidenceThreshold,
-        iouThreshold: iouThreshold,
-      ),
-    );
+    try {
+      await initialize(modelPath: modelPath);
+      return await _isolate.runInference(
+        InferenceRequest(
+          imageBytes: imageBytes,
+          confidenceThreshold: confidenceThreshold,
+          iouThreshold: iouThreshold,
+        ),
+      );
+    } catch (e) {
+      // Tự động khôi phục isolate khi gặp lỗi hoặc timeout bằng cách giải phóng tài nguyên lỗi
+      _isolate.dispose();
+      _initializing = null;
+      rethrow;
+    }
   }
 
   void dispose() {

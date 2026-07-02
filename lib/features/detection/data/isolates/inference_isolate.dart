@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 // ignore: unnecessary_import
@@ -53,7 +54,10 @@ class InferenceIsolate {
     final responsePort = ReceivePort();
     try {
       _sendPort!.send([request, responsePort.sendPort]);
-      final result = await responsePort.first as List<Detection>;
+      final result = await responsePort.first.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw TimeoutException('Inference request timed out.'),
+      ) as List<Detection>;
       return result;
     } finally {
       responsePort.close();

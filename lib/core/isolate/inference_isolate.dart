@@ -1,7 +1,9 @@
 import 'dart:isolate';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
+
 import '../../data/models/detection.dart';
 import '../../data/models/model_config.dart';
 import '../../data/services/image_service.dart';
@@ -41,12 +43,17 @@ class InferenceIsolate {
 
   Future<List<Detection>> runInference(InferenceRequest request) async {
     final responsePort = ReceivePort();
-    _sendPort.send([request, responsePort.sendPort]);
-    final result = await responsePort.first as List<Detection>;
-    return result;
+    try {
+      _sendPort.send([request, responsePort.sendPort]);
+      final result = await responsePort.first as List<Detection>;
+      return result;
+    } finally {
+      responsePort.close();
+    }
   }
 
   void dispose() {
+    _isReady = false;
     _isolate.kill(priority: Isolate.beforeNextEvent);
     _receivePort.close();
   }
@@ -60,11 +67,16 @@ class InferenceIsolate {
     // Khởi tạo interpreter tflite trong Isolate phụ
     final options = InterpreterOptions()..threads = 4;
     options.useNnApiForAndroid = true;
-    
+
     final interpreter = await Interpreter.fromAsset(
       ModelConfig.modelAssetPath,
       options: options,
     );
+
+    // Cache kích thước output tensor
+    final outputShape = interpreter.getOutputTensors().first.shape;
+    final numClasses = outputShape[1] - 4;
+    final numBoxes = outputShape[2];
 
     final commandPort = ReceivePort();
     mainSendPort.send(commandPort.sendPort);
@@ -85,9 +97,6 @@ class InferenceIsolate {
           return;
         }
 
-        // YOLOv8n có 1 output tensor hình dạng [1, 4 + num_classes, 8400]
-        final numClasses = interpreter.getOutputTensors().first.shape[1] - 4;
-        final numBoxes = interpreter.getOutputTensors().first.shape[2];
         final outputBuffer = Float32List(1 * (4 + numClasses) * numBoxes);
 
         // 2. Chạy mô hình
@@ -133,7 +142,10 @@ class InferenceIsolate {
         final filtered = applyNMS(unletterboxed, request.iouThreshold);
 
         replyPort.send(filtered);
-      } catch (e) {
+      } catch (e, stackTrace) {
+        if (kDebugMode) {
+          print('Error in InferenceIsolate: $e\n$stackTrace');
+        }
         replyPort.send(<Detection>[]);
       }
     });

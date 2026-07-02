@@ -16,8 +16,8 @@ class CameraScreen extends ConsumerStatefulWidget {
 class _CameraScreenState extends ConsumerState<CameraScreen> {
   CameraController? _controller;
   bool _isProcessing = false;
-  DateTime? _lastInferenceTime;
   Size? _previewSize;
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -36,49 +36,42 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     );
 
     await _controller!.initialize();
-    _previewSize = Size(
-      _controller!.value.previewSize!.height,
-      _controller!.value.previewSize!.width,
-    );
 
-    _controller!.startImageStream((CameraImage image) {
-      _processCameraFrame(image);
-    });
-
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+      _startPeriodicCapture();
+    }
   }
 
-  Future<void> _processCameraFrame(CameraImage image) async {
-    if (_isProcessing) return;
-
-    final now = DateTime.now();
-    // Throttle: Chỉ xử lý 1 frame mỗi 400ms
-    if (_lastInferenceTime != null && 
-        now.difference(_lastInferenceTime!).inMilliseconds < 400) {
-      return;
-    }
-
-    _isProcessing = true;
-    _lastInferenceTime = now;
-
-    try {
-      // Gộp các planes camera thành bytes đơn giản
-      final WriteBuffer allBytes = WriteBuffer();
-      for (final Plane plane in image.planes) {
-        allBytes.putUint8List(plane.bytes);
+  Future<void> _startPeriodicCapture() async {
+    while (!_isDisposed && mounted) {
+      if (_controller != null && _controller!.value.isInitialized && !_isProcessing) {
+        if (mounted) {
+          setState(() {
+            _isProcessing = true;
+          });
+        }
+        try {
+          final XFile file = await _controller!.takePicture();
+          final bytes = await file.readAsBytes();
+          if (!_isDisposed && mounted) {
+            final decodedImage = await decodeImageFromList(bytes);
+            _previewSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
+            await ref.read(detectorNotifierProvider.notifier).detectImage(bytes);
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('Error capturing picture: $e');
+          }
+        } finally {
+          if (mounted) {
+            setState(() {
+              _isProcessing = false;
+            });
+          }
+        }
       }
-      final Uint8List bytes = allBytes.done().buffer.asUint8List();
-      
-      // Gửi sang isolate qua notifier
-      await ref.read(detectorNotifierProvider.notifier).detectImage(bytes);
-    } catch (e) {
-      // Bỏ qua lỗi frame
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
+      await Future.delayed(const Duration(milliseconds: 1000));
     }
   }
 
@@ -130,7 +123,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   @override
   void dispose() {
-    _controller?.stopImageStream();
+    _isDisposed = true;
     _controller?.dispose();
     super.dispose();
   }

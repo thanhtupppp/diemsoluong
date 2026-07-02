@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/models/detection.dart';
@@ -17,6 +18,9 @@ class DetectorPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (originalImageSize.isEmpty) return;
+
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
 
     final fittedSizes = applyBoxFit(
       BoxFit.contain,
@@ -87,9 +91,9 @@ class DetectorPainter extends CustomPainter {
       final labelHeight = textPainter.height + verticalPadding * 2;
 
       final labelLeft = mappedRect.left.clamp(0.0, size.width - labelWidth);
-      final labelTop = mappedRect.top - labelHeight >= 0
-          ? mappedRect.top - labelHeight
-          : mappedRect.top;
+      final rawTop =
+          mappedRect.top - labelHeight >= 0 ? mappedRect.top - labelHeight : mappedRect.top;
+      final labelTop = rawTop.clamp(0.0, size.height - labelHeight);
 
       final labelRect = Rect.fromLTWH(
         labelLeft,
@@ -111,12 +115,14 @@ class DetectorPainter extends CustomPainter {
         ),
       );
     }
+
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant DetectorPainter oldDelegate) {
-    return oldDelegate.detections != detections ||
+    return !listEquals(oldDelegate.detections, detections) ||
         oldDelegate.originalImageSize != originalImageSize ||
-        oldDelegate.labels != labels;
+        !listEquals(oldDelegate.labels, labels);
   }
 }

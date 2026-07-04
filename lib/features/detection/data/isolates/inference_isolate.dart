@@ -164,6 +164,7 @@ class InferenceIsolate {
           numBoxes: numBoxes,
           numClasses: numClasses,
           confidenceThreshold: request.confidenceThreshold,
+          debugLog: kDebugMode ? debugPrint : null,
         );
 
         // Ánh xạ ngược tọa độ từ model space về original image space (unletterbox)

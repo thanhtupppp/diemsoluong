@@ -6,6 +6,8 @@ import '../../../../data/models/detection.dart';
 import '../../../../data/models/model_config.dart';
 import '../services/object_detection_output_decoder.dart';
 
+enum ScoreActivation { none, sigmoid, softmax }
+
 class EfficientDetAnchor {
   final double xCenter;
   final double yCenter;
@@ -70,10 +72,19 @@ List<Detection> decodeMediaPipeDetections({
   required double confidenceThreshold,
   required List<EfficientDetAnchor> anchors,
   int inputSize = ModelConfig.inputSize,
+  Set<int>? allowedClassIds,
+  ScoreActivation scoreActivation = ScoreActivation.none,
+  DetectionDebugLog? debugLog,
 }) {
   if (boxes.length < numBoxes * 4 ||
       scores.length < numBoxes * numClasses ||
       anchors.length < numBoxes) {
+    debugLog?.call(
+      'MediaPipe EfficientDet decoder shape mismatch: '
+      'boxes.length=${boxes.length}, scores.length=${scores.length}, '
+      'anchors.length=${anchors.length}, numBoxes=$numBoxes, '
+      'numClasses=$numClasses.',
+    );
     return [];
   }
 
@@ -84,14 +95,31 @@ List<Detection> decodeMediaPipeDetections({
 
   final inputSizeDouble = inputSize.toDouble();
   final detections = <Detection>[];
+  final softmaxBuffer = scoreActivation == ScoreActivation.softmax
+      ? Float32List(numClasses)
+      : null;
 
   for (int i = 0; i < numBoxes; i++) {
     double bestScore = 0.0;
     int bestClassId = -1;
 
     final scoreOffset = i * numClasses;
+
+    if (softmaxBuffer != null) {
+      _fillSoftmaxScores(scores, scoreOffset, numClasses, softmaxBuffer);
+    }
+
     for (int c = 0; c < numClasses; c++) {
-      final score = scores[scoreOffset + c];
+      if (allowedClassIds != null && !allowedClassIds.contains(c)) {
+        continue;
+      }
+
+      final score = switch (scoreActivation) {
+        ScoreActivation.none => scores[scoreOffset + c],
+        ScoreActivation.sigmoid => _sigmoid(scores[scoreOffset + c]),
+        ScoreActivation.softmax => softmaxBuffer![c],
+      };
+
       if (score > bestScore) {
         bestScore = score;
         bestClassId = c;
@@ -136,14 +164,58 @@ List<Detection> decodeMediaPipeDetections({
   return detections;
 }
 
+double _sigmoid(double value) {
+  if (value >= 0) {
+    final z = exp(-value);
+    return 1.0 / (1.0 + z);
+  }
+  final z = exp(value);
+  return z / (1.0 + z);
+}
+
+void _fillSoftmaxScores(
+  Float32List scores,
+  int scoreOffset,
+  int numClasses,
+  Float32List output,
+) {
+  double maxLogit = double.negativeInfinity;
+  for (int c = 0; c < numClasses; c++) {
+    final value = scores[scoreOffset + c];
+    if (value > maxLogit) {
+      maxLogit = value;
+    }
+  }
+
+  double sum = 0.0;
+  for (int c = 0; c < numClasses; c++) {
+    final value = exp(scores[scoreOffset + c] - maxLogit);
+    output[c] = value;
+    sum += value;
+  }
+
+  if (sum <= 0 || !sum.isFinite) {
+    for (int c = 0; c < numClasses; c++) {
+      output[c] = 0.0;
+    }
+    return;
+  }
+
+  for (int c = 0; c < numClasses; c++) {
+    output[c] = output[c] / sum;
+  }
+}
+
 class MediaPipeEfficientDetOutputDecoder
     implements ObjectDetectionOutputDecoder {
   final int inputSize;
   final List<EfficientDetAnchor> anchors;
+  final ScoreActivation scoreActivation;
 
   MediaPipeEfficientDetOutputDecoder({
     required this.inputSize,
     List<EfficientDetAnchor>? anchors,
+    this.scoreActivation = ScoreActivation.none,
   }) : anchors = anchors ?? buildEfficientDetAnchors(inputSize: inputSize);
 
   @override
@@ -153,6 +225,8 @@ class MediaPipeEfficientDetOutputDecoder
     required int numBoxes,
     required int numClasses,
     required double confidenceThreshold,
+    Set<int>? allowedClassIds,
+    DetectionDebugLog? debugLog,
   }) {
     return decodeMediaPipeDetections(
       boxes: boxes,
@@ -162,6 +236,9 @@ class MediaPipeEfficientDetOutputDecoder
       confidenceThreshold: confidenceThreshold,
       anchors: anchors,
       inputSize: inputSize,
+      allowedClassIds: allowedClassIds,
+      scoreActivation: scoreActivation,
+      debugLog: debugLog,
     );
   }
 }

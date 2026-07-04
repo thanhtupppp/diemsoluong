@@ -10,6 +10,7 @@ Flutter app for on-device object detection and counting with Google AI Edge / Me
 - Letterbox preprocessing to preserve aspect ratio before model inference.
 - TFLite inference in a Dart isolate with recovery after worker errors/timeouts.
 - Google AI Edge / MediaPipe EfficientDet raw output decoding behind a small decoder adapter.
+- Optional decoder class filtering and score activation for compatible custom models.
 - Class-aware Non-Maximum Suppression.
 - IoU tracker with center-distance fallback for low-FPS object jumps.
 - Normalized counting line coordinates, draggable line handles, and direction-aware counting.
@@ -88,6 +89,8 @@ Recommended workflow: train and export a compatible object detector with Google 
 
 The default bundled model is the Google AI Edge / MediaPipe EfficientDet-Lite0 float16 Object Detector model. Its direct TFLite outputs are raw box offsets `[1, 19206, 4]` and class scores `[1, 19206, 90]`; the app performs EfficientDet anchor decoding and NMS in Dart.
 
+The bundled model uses probability-like scores, so the decoder default is `ScoreActivation.none`. Custom models that output logits should explicitly switch the decoder to `sigmoid` or `softmax` and add matching tests.
+
 See:
 
 - `docs/model_maker.md`
@@ -137,6 +140,7 @@ Current unit tests cover:
 
 - Google AI Edge / MediaPipe EfficientDet anchor generation and raw detection decoding.
 - The active output decoder adapter.
+- Boundary clamping, degenerate-box filtering, optional class masks, score activation, and shape-mismatch debug logging.
 - Non-Maximum Suppression.
 - Image YUV to RGB channel conversion helpers.
 - TFLite service isolate recovery.

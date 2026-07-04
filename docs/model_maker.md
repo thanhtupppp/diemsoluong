@@ -53,7 +53,13 @@ Before replacing the default model:
 - Confirm the exported model input size and dtype.
 - Confirm whether outputs are raw EfficientDet boxes/scores or already
   post-processed detections such as count, scores, classes, and boxes.
+- Confirm whether class scores are already probabilities or raw logits. The
+  default bundled model uses probability-like scores, so the runtime default is
+  `ScoreActivation.none`; use `sigmoid` or `softmax` only for models that need
+  it.
 - Confirm whether the model uses sparse class IDs and placeholder labels.
+- Use `allowedClassIds` in the active decoder when the app should count only a
+  subset of classes before NMS.
 - Update the decode tests to match the new output layout.
 - Run `flutter analyze`.
 - Run `flutter test --reporter compact`.

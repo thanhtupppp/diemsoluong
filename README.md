@@ -9,7 +9,7 @@ Flutter app for on-device object detection and counting with Google AI Edge / Me
 - YUV420, NV21, BGRA8888, and JPEG camera frame conversion.
 - Letterbox preprocessing to preserve aspect ratio before model inference.
 - TFLite inference in a Dart isolate with recovery after worker errors/timeouts.
-- Google AI Edge / MediaPipe EfficientDet raw output decoding with anchor-based box decoding.
+- Google AI Edge / MediaPipe EfficientDet raw output decoding behind a small decoder adapter.
 - Class-aware Non-Maximum Suppression.
 - IoU tracker with center-distance fallback for low-FPS object jumps.
 - Normalized counting line coordinates, draggable line handles, and direction-aware counting.
@@ -41,7 +41,7 @@ graph TD
     B --> C[Letterbox Preprocess]
     C --> D[InferenceIsolate]
     D --> E[TFLite Interpreter]
-    E --> F[decodeMediaPipeDetections]
+    E --> F[ObjectDetectionOutputDecoder]
     F --> G[Unletterbox to Original Image Space]
     G --> H[applyNMS]
     H --> I[IouTracker]
@@ -53,7 +53,7 @@ graph TD
 
 ### Main Modules
 
-- `lib/features/detection`: image preprocessing, TFLite isolate, decode, NMS.
+- `lib/features/detection`: image preprocessing, TFLite isolate, output decoding, NMS.
 - `lib/features/tracking`: object track IDs and path history.
 - `lib/features/counting`: normalized counting line and line-cross counting.
 - `lib/features/overlay`: canvas overlay and draggable counting line handles.
@@ -87,6 +87,11 @@ The line is mapped to image pixels before counting and to view pixels before pai
 Recommended workflow: train and export a compatible object detector with Google AI Edge / MediaPipe Model Maker, then place the `.tflite` file under `assets/models/` and update `ModelConfig.modelAssetPath` plus `pubspec.yaml`.
 
 The default bundled model is the Google AI Edge / MediaPipe EfficientDet-Lite0 float16 Object Detector model. Its direct TFLite outputs are raw box offsets `[1, 19206, 4]` and class scores `[1, 19206, 90]`; the app performs EfficientDet anchor decoding and NMS in Dart.
+
+See:
+
+- `docs/model_maker.md`
+- `docs/runtime_verification.md`
 
 ## Development
 
@@ -131,6 +136,7 @@ flutter run --release
 Current unit tests cover:
 
 - Google AI Edge / MediaPipe EfficientDet anchor generation and raw detection decoding.
+- The active output decoder adapter.
 - Non-Maximum Suppression.
 - Image YUV to RGB channel conversion helpers.
 - TFLite service isolate recovery.
@@ -143,6 +149,8 @@ Current unit tests cover:
 - Verify camera orientation and mirror behavior on physical Android and iOS devices.
 - Profile inference latency, preprocessing latency, memory, and thermal behavior.
 - Confirm the active model output tensor layout before release if replacing the default EfficientDet-Lite0 model.
+- Confirm the active labels are aligned with the model metadata, including sparse COCO placeholder entries.
+- Re-run line-cross counting checks after detector changes because bounding box footprints can shift between model families.
 - Tune live inference throttle for the target device class.
 - Calibrate counting-line direction for each real installation.
 - Add share/open-file UX for exported CSV/JSON reports if operators need direct handoff.

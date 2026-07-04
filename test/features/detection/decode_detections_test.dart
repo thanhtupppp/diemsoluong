@@ -65,5 +65,33 @@ void main() {
 
       expect(detections, isEmpty);
     });
+
+    test(
+      'MediaPipeEfficientDetOutputDecoder delegates to MediaPipe decoder',
+      () {
+        final decoder = MediaPipeEfficientDetOutputDecoder(
+          inputSize: 320,
+          anchors: const [
+            EfficientDetAnchor(
+              xCenter: 0.5,
+              yCenter: 0.5,
+              width: 0.25,
+              height: 0.25,
+            ),
+          ],
+        );
+
+        final detections = decoder.decode(
+          boxes: Float32List(4),
+          scores: Float32List.fromList([0.9]),
+          numBoxes: 1,
+          numClasses: 1,
+          confidenceThreshold: 0.5,
+        );
+
+        expect(detections, hasLength(1));
+        expect(detections.single.classId, 0);
+      },
+    );
   });
 }

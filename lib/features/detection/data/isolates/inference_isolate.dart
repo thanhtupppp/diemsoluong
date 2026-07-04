@@ -121,11 +121,13 @@ class InferenceIsolate {
     );
     final numBoxes = boxesSpec.shape[1];
     final numClasses = scoresSpec.shape[2];
-    final anchors = buildEfficientDetAnchors(inputSize: inputSize);
+    final outputDecoder = MediaPipeEfficientDetOutputDecoder(
+      inputSize: inputSize,
+    );
 
-    if (anchors.length != numBoxes) {
+    if (outputDecoder.anchors.length != numBoxes) {
       throw StateError(
-        'EfficientDet anchor count ${anchors.length} does not match model output $numBoxes.',
+        'EfficientDet anchor count ${outputDecoder.anchors.length} does not match model output $numBoxes.',
       );
     }
 
@@ -156,14 +158,12 @@ class InferenceIsolate {
         ], outputBuffers.map);
 
         // 3. Decode raw boxes/scores with EfficientDet anchors.
-        final decoded = decodeMediaPipeDetections(
+        final decoded = outputDecoder.decode(
           boxes: outputBuffers.byPosition[boxesSpec.position]!,
           scores: outputBuffers.byPosition[scoresSpec.position]!,
           numBoxes: numBoxes,
           numClasses: numClasses,
           confidenceThreshold: request.confidenceThreshold,
-          anchors: anchors,
-          inputSize: inputSize,
         );
 
         // Ánh xạ ngược tọa độ từ model space về original image space (unletterbox)

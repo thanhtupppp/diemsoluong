@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import '../../../../data/models/detection.dart';
 import '../../../../data/models/model_config.dart';
+import '../services/object_detection_output_decoder.dart';
 
 class EfficientDetAnchor {
   final double xCenter;
@@ -133,4 +134,34 @@ List<Detection> decodeMediaPipeDetections({
   }
 
   return detections;
+}
+
+class MediaPipeEfficientDetOutputDecoder
+    implements ObjectDetectionOutputDecoder {
+  final int inputSize;
+  final List<EfficientDetAnchor> anchors;
+
+  MediaPipeEfficientDetOutputDecoder({
+    required this.inputSize,
+    List<EfficientDetAnchor>? anchors,
+  }) : anchors = anchors ?? buildEfficientDetAnchors(inputSize: inputSize);
+
+  @override
+  List<Detection> decode({
+    required Float32List boxes,
+    required Float32List scores,
+    required int numBoxes,
+    required int numClasses,
+    required double confidenceThreshold,
+  }) {
+    return decodeMediaPipeDetections(
+      boxes: boxes,
+      scores: scores,
+      numBoxes: numBoxes,
+      numClasses: numClasses,
+      confidenceThreshold: confidenceThreshold,
+      anchors: anchors,
+      inputSize: inputSize,
+    );
+  }
 }

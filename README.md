@@ -1,6 +1,6 @@
 # Real-Time Object Detection & Counting App
 
-Flutter app for on-device object detection and counting with YOLOv8 exported to TensorFlow Lite. The app supports still-image detection, live camera scanning, object tracking, line-cross counting, overlay rendering, and CSV/JSON export.
+Flutter app for on-device object detection and counting with Google AI Edge / MediaPipe EfficientDet exported to TensorFlow Lite. The app supports still-image detection, live camera scanning, object tracking, line-cross counting, overlay rendering, and CSV/JSON export.
 
 ## Features
 
@@ -9,7 +9,7 @@ Flutter app for on-device object detection and counting with YOLOv8 exported to 
 - YUV420, NV21, BGRA8888, and JPEG camera frame conversion.
 - Letterbox preprocessing to preserve aspect ratio before model inference.
 - TFLite inference in a Dart isolate with recovery after worker errors/timeouts.
-- YOLO output decoding with configurable box coordinate format: normalized or pixel-space.
+- Google AI Edge / MediaPipe EfficientDet raw output decoding with anchor-based box decoding.
 - Class-aware Non-Maximum Suppression.
 - IoU tracker with center-distance fallback for low-FPS object jumps.
 - Normalized counting line coordinates, draggable line handles, and direction-aware counting.
@@ -22,19 +22,16 @@ The default model is declared in `pubspec.yaml`:
 
 ```yaml
 assets:
-  - assets/models/yolov8n_float16.tflite
+  - assets/models/efficientdet_lite0_float16.tflite
 ```
 
 Runtime config lives in `lib/data/models/model_config.dart`:
 
-- Input size: `640`
-- Model path: `assets/models/yolov8n_float16.tflite`
-- Labels: COCO labels
+- Input size: `320`
+- Model path: `assets/models/efficientdet_lite0_float16.tflite`
+- Labels: COCO labels from the MediaPipe model metadata, including `???` placeholders for sparse COCO IDs
 - Default confidence threshold: `0.25`
 - Default IoU threshold: `0.45`
-- Box coordinate format: `BoxCoordinateFormat.normalized`
-
-If a custom TFLite model outputs boxes in pixel coordinates instead of normalized coordinates, update `ModelConfig.boxCoordinateFormat` to `BoxCoordinateFormat.pixels`.
 
 ## Architecture
 
@@ -44,7 +41,7 @@ graph TD
     B --> C[Letterbox Preprocess]
     C --> D[InferenceIsolate]
     D --> E[TFLite Interpreter]
-    E --> F[decodeDetections]
+    E --> F[decodeMediaPipeDetections]
     F --> G[Unletterbox to Original Image Space]
     G --> H[applyNMS]
     H --> I[IouTracker]
@@ -87,41 +84,9 @@ The line is mapped to image pixels before counting and to view pixels before pai
 
 ## Training and Export
 
-Recommended workflow: train and export on Google Colab using:
+Recommended workflow: train and export a compatible object detector with Google AI Edge / MediaPipe Model Maker, then place the `.tflite` file under `assets/models/` and update `ModelConfig.modelAssetPath` plus `pubspec.yaml`.
 
-```text
-python_scripts/colab_yolov8_train_export.ipynb
-```
-
-The notebook supports Roboflow datasets and YOLO-format ZIP datasets from Google Drive. It trains YOLOv8, validates metrics, exports `.tflite`, and prints TFLite input/output tensor details.
-
-Example training script:
-
-```python
-from ultralytics import YOLO
-
-model = YOLO("yolov8n.pt")
-model.train(
-    data="custom_dataset.yaml",
-    epochs=100,
-    imgsz=640,
-    device=0,
-)
-```
-
-Example export:
-
-```bash
-yolo export model=runs/detect/train/weights/best.pt format=tflite imgsz=640 half=True
-```
-
-After export, place the model at:
-
-```text
-assets/models/yolov8n_float16.tflite
-```
-
-or update `ModelConfig.modelAssetPath` and `pubspec.yaml` to match the new file.
+The default bundled model is the Google AI Edge / MediaPipe EfficientDet-Lite0 float16 Object Detector model. Its direct TFLite outputs are raw box offsets `[1, 19206, 4]` and class scores `[1, 19206, 90]`; the app performs EfficientDet anchor decoding and NMS in Dart.
 
 ## Development
 
@@ -165,7 +130,7 @@ flutter run --release
 
 Current unit tests cover:
 
-- YOLO detection decoding, including normalized and pixel-space boxes.
+- Google AI Edge / MediaPipe EfficientDet anchor generation and raw detection decoding.
 - Non-Maximum Suppression.
 - Image YUV to RGB channel conversion helpers.
 - TFLite service isolate recovery.
@@ -177,7 +142,7 @@ Current unit tests cover:
 
 - Verify camera orientation and mirror behavior on physical Android and iOS devices.
 - Profile inference latency, preprocessing latency, memory, and thermal behavior.
-- Confirm the active model output coordinate format before release.
+- Confirm the active model output tensor layout before release if replacing the default EfficientDet-Lite0 model.
 - Tune live inference throttle for the target device class.
 - Calibrate counting-line direction for each real installation.
 - Add share/open-file UX for exported CSV/JSON reports if operators need direct handoff.

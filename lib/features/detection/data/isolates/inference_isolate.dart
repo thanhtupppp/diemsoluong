@@ -11,8 +11,8 @@ import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 import '../../../../data/models/detection.dart';
-import '../../domain/usecases/decode_detections.dart';
 import '../../domain/usecases/apply_nms.dart';
+import '../../domain/usecases/decode_mediapipe_detections.dart';
 import '../services/image_service.dart';
 
 class InferenceRequest {
@@ -43,10 +43,11 @@ class InferenceIsolate {
     _receivePort = receivePort;
 
     try {
-      final isolate = await Isolate.spawn(
-        _isolateEntryPoint,
-        [receivePort.sendPort, token, modelPath],
-      );
+      final isolate = await Isolate.spawn(_isolateEntryPoint, [
+        receivePort.sendPort,
+        token,
+        modelPath,
+      ]);
       _isolate = isolate;
 
       _sendPort = await receivePort.first as SendPort;
@@ -64,10 +65,13 @@ class InferenceIsolate {
     final responsePort = ReceivePort();
     try {
       _sendPort!.send([request, responsePort.sendPort]);
-      final result = await responsePort.first.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => throw TimeoutException('Inference request timed out.'),
-      ) as List<Detection>;
+      final result =
+          await responsePort.first.timeout(
+                const Duration(seconds: 5),
+                onTimeout: () =>
+                    throw TimeoutException('Inference request timed out.'),
+              )
+              as List<Detection>;
       return result;
     } finally {
       responsePort.close();
@@ -97,24 +101,33 @@ class InferenceIsolate {
 
     final Interpreter interpreter;
     if (modelPath.startsWith('assets/')) {
-      interpreter = await Interpreter.fromAsset(
-        modelPath,
-        options: options,
-      );
+      interpreter = await Interpreter.fromAsset(modelPath, options: options);
     } else {
-      interpreter = Interpreter.fromFile(
-        File(modelPath),
-        options: options,
-      );
+      interpreter = Interpreter.fromFile(File(modelPath), options: options);
     }
 
-    // Cache kích thước output tensor
-    final outputShape = interpreter.getOutputTensors().first.shape;
-    final numClasses = outputShape[1] - 4;
-    final numBoxes = outputShape[2];
-
     final inputShape = interpreter.getInputTensors().first.shape;
-    final inputSize = inputShape[1]; // e.g. 640
+    final inputSize = inputShape[1]; // e.g. 320 for EfficientDet-Lite0
+    final outputTensors = interpreter.getOutputTensors();
+    final outputSpecs = _buildOutputSpecs(outputTensors);
+    final boxesSpec = outputSpecs.firstWhere(
+      (spec) => spec.isBoxTensor,
+      orElse: () => throw StateError('MediaPipe box output tensor not found.'),
+    );
+    final scoresSpec = outputSpecs.firstWhere(
+      (spec) => spec.isScoreTensor,
+      orElse: () =>
+          throw StateError('MediaPipe score output tensor not found.'),
+    );
+    final numBoxes = boxesSpec.shape[1];
+    final numClasses = scoresSpec.shape[2];
+    final anchors = buildEfficientDetAnchors(inputSize: inputSize);
+
+    if (anchors.length != numBoxes) {
+      throw StateError(
+        'EfficientDet anchor count ${anchors.length} does not match model output $numBoxes.',
+      );
+    }
 
     final commandPort = ReceivePort();
     mainSendPort.send(commandPort.sendPort);
@@ -135,20 +148,22 @@ class InferenceIsolate {
           return;
         }
 
-        final outputBuffer = Float32List(1 * (4 + numClasses) * numBoxes);
+        final outputBuffers = _createOutputBuffers(outputSpecs);
 
-        // 2. Chạy mô hình
-        interpreter.run(
-          preprocessResult.input.reshape([1, inputSize, inputSize, 3]),
-          outputBuffer.reshape([1, 4 + numClasses, numBoxes]),
-        );
+        // 2. Run the Google AI Edge / MediaPipe EfficientDet model.
+        interpreter.runForMultipleInputs([
+          preprocessResult.input.reshape(inputShape),
+        ], outputBuffers.map);
 
-        // 3. Giải mã
-        final decoded = decodeDetections(
-          outputBuffer,
-          numBoxes,
-          numClasses,
-          request.confidenceThreshold,
+        // 3. Decode raw boxes/scores with EfficientDet anchors.
+        final decoded = decodeMediaPipeDetections(
+          boxes: outputBuffers.byPosition[boxesSpec.position]!,
+          scores: outputBuffers.byPosition[scoresSpec.position]!,
+          numBoxes: numBoxes,
+          numClasses: numClasses,
+          confidenceThreshold: request.confidenceThreshold,
+          anchors: anchors,
+          inputSize: inputSize,
         );
 
         // Ánh xạ ngược tọa độ từ model space về original image space (unletterbox)
@@ -188,4 +203,44 @@ class InferenceIsolate {
       }
     });
   }
+
+  static List<_OutputSpec> _buildOutputSpecs(List<Tensor> tensors) {
+    return [
+      for (int i = 0; i < tensors.length; i++)
+        _OutputSpec(position: i, shape: tensors[i].shape),
+    ];
+  }
+
+  static _OutputBuffers _createOutputBuffers(List<_OutputSpec> specs) {
+    final outputMap = <int, Object>{};
+    final byPosition = <int, Float32List>{};
+
+    for (final spec in specs) {
+      final buffer = Float32List(spec.elementCount);
+      byPosition[spec.position] = buffer;
+      outputMap[spec.position] = buffer.reshape(spec.shape);
+    }
+
+    return _OutputBuffers(map: outputMap, byPosition: byPosition);
+  }
+}
+
+class _OutputSpec {
+  final int position;
+  final List<int> shape;
+
+  const _OutputSpec({required this.position, required this.shape});
+
+  int get elementCount => shape.fold(1, (value, element) => value * element);
+
+  bool get isBoxTensor => shape.length == 3 && shape[2] == 4;
+
+  bool get isScoreTensor => shape.length == 3 && shape[2] > 4;
+}
+
+class _OutputBuffers {
+  final Map<int, Object> map;
+  final Map<int, Float32List> byPosition;
+
+  const _OutputBuffers({required this.map, required this.byPosition});
 }

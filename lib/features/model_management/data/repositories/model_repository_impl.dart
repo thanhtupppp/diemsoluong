@@ -6,12 +6,12 @@ import '../../domain/repositories/model_repository.dart';
 class ModelRepositoryImpl implements ModelRepository {
   @override
   Future<List<ModelInfo>> getAvailableModels() async {
-    // Trả về mô hình YOLOv8n mặc định sẵn có trong tài nguyên ứng dụng
+    // Default Google AI Edge / MediaPipe object detector bundled with the app.
     return [
       const ModelInfo(
-        id: 'yolov8n_coco',
-        name: 'YOLOv8n (COCO)',
-        backend: 'TFLite',
+        id: 'efficientdet_lite0_coco',
+        name: 'EfficientDet-Lite0 (COCO)',
+        backend: 'Google AI Edge / MediaPipe',
         path: ModelConfig.modelAssetPath,
         inputSize: ModelConfig.inputSize,
         labels: ModelConfig.cocoLabels,

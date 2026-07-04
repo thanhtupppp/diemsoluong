@@ -39,6 +39,17 @@ class InferenceIsolate {
     if (_isReady) return;
 
     final token = RootIsolateToken.instance!;
+    final ByteData? modelAssetBytes = modelPath.startsWith('assets/')
+        ? await rootBundle.load(modelPath)
+        : null;
+    final modelAssetData = modelAssetBytes == null
+        ? null
+        : TransferableTypedData.fromList([
+            modelAssetBytes.buffer.asUint8List(
+              modelAssetBytes.offsetInBytes,
+              modelAssetBytes.lengthInBytes,
+            ),
+          ]);
     final receivePort = ReceivePort();
     _receivePort = receivePort;
 
@@ -47,6 +58,7 @@ class InferenceIsolate {
         receivePort.sendPort,
         token,
         modelPath,
+        modelAssetData,
       ]);
       _isolate = isolate;
 
@@ -92,6 +104,7 @@ class InferenceIsolate {
     final mainSendPort = args[0] as SendPort;
     final token = args[1] as RootIsolateToken;
     final modelPath = args[2] as String;
+    final modelAssetData = args[3] as TransferableTypedData?;
 
     BackgroundIsolateBinaryMessenger.ensureInitialized(token);
 
@@ -100,8 +113,11 @@ class InferenceIsolate {
     options.useNnApiForAndroid = true;
 
     final Interpreter interpreter;
-    if (modelPath.startsWith('assets/')) {
-      interpreter = await Interpreter.fromAsset(modelPath, options: options);
+    if (modelAssetData != null) {
+      interpreter = Interpreter.fromBuffer(
+        modelAssetData.materialize().asUint8List(),
+        options: options,
+      );
     } else {
       interpreter = Interpreter.fromFile(File(modelPath), options: options);
     }

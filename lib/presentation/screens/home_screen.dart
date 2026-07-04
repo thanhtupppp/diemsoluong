@@ -260,8 +260,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
             Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              child: Wrap(
+                spacing: 8.0,
+                runSpacing: 8.0,
+                alignment: WrapAlignment.spaceEvenly,
                 children: [
                   ElevatedButton.icon(
                     onPressed: () => _pickImage(ImageSource.gallery),
